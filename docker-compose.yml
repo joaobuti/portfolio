@@ -1,0 +1,99 @@
+# One command to a working system: `make up`.
+#
+# Four services, because the application genuinely has four moving parts. The
+# worker and the scheduler run as separate containers rather than as background
+# processes inside the web container — that is how they run in production, and a
+# local setup that hides the distinction teaches the wrong mental model.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      CONTAINER_ROLE: app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Consumes the billing and observability queues. Scale it with
+  # `docker compose up --scale worker=3` — the jobs are unique-while-queued and
+  # idempotent, so extra workers are safe.
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    volumes:
+      - .:/var/www/html
+    environment:
+      CONTAINER_ROLE: worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Runs `schedule:work`. Exactly one of these, ever — the schedule's
+  # onOneServer() lock makes a second one harmless, but there is no reason to
+  # have it.
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    volumes:
+      - .:/var/www/html
+    environment:
+      CONTAINER_ROLE: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-billing}
+      POSTGRES_USER: ${DB_USERNAME:-billing}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT_HOST:-5432}:5432"
+    healthcheck:
+      # depends_on with condition: service_healthy is what makes `up` reliable.
+      # Without it the app races the database and fails on first boot roughly
+      # half the time, which is the single most common "it doesn't work on my
+      # machine" report for a compose stack.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-billing} -d ${DB_DATABASE:-billing}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT_HOST:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,24 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+
+    paths:
+        - app
+        - database
+        - routes
+        - config
+
+    # Every one of these would be a legitimate finding elsewhere; here they are
+    # noise from Eloquent's dynamic surface, and each is listed individually
+    # rather than silenced with a blanket ignore.
+    ignoreErrors:
+        - identifier: missingType.generics
+          path: database/factories/*
+
+    checkModelProperties: true
+    checkOctaneCompatibility: true
+
+    # No baseline file, on purpose. A baseline is a promise to fix things later
+    # that nobody keeps; this project starts at level max and stays there.

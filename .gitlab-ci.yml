@@ -1,0 +1,130 @@
+# Every stage blocks the merge. A pipeline with a job set to allow_failure is
+# a pipeline that tells you nothing.
+#
+# Stages are ordered by how fast they fail: formatting in seconds, static
+# analysis in tens of seconds, tests in minutes. A missing comma should never
+# cost you a full test run to discover.
+
+stages:
+  - lint
+  - analyse
+  - test
+  - build
+
+default:
+  image: php:8.3-cli-alpine
+  before_script:
+    - apk add --no-cache git unzip icu-dev libzip-dev postgresql-dev linux-headers $PHPIZE_DEPS
+    - docker-php-ext-install -j$(nproc) pdo_pgsql pcntl bcmath intl zip > /dev/null
+    - pecl install redis > /dev/null && docker-php-ext-enable redis
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
+    - composer install --no-interaction --prefer-dist --no-progress
+
+# The vendor directory is the slowest thing in this pipeline; keying the cache
+# on composer.lock means it is rebuilt only when dependencies actually change.
+cache:
+  key:
+    files:
+      - composer.lock
+  paths:
+    - vendor/
+  policy: pull
+
+variables:
+  APP_ENV: testing
+
+# ------------------------------------------------------------------ lint
+
+pint:
+  stage: lint
+  script:
+    - vendor/bin/pint --test
+
+# --------------------------------------------------------------- analyse
+
+phpstan:
+  stage: analyse
+  script:
+    - vendor/bin/phpstan analyse --memory-limit=1G --error-format=gitlab > phpstan.json
+  artifacts:
+    reports:
+      codequality: phpstan.json
+
+rector:
+  stage: analyse
+  script:
+    - vendor/bin/rector process --dry-run
+
+# ------------------------------------------------------------------ test
+
+# Domain rules, in memory, no services. If this job is slow, the architecture
+# has drifted.
+unit:
+  stage: test
+  script:
+    - php artisan test --testsuite=Unit
+
+architecture:
+  stage: test
+  script:
+    - php artisan test --testsuite=Arch
+
+# The real thing: Postgres and Redis as services, not fakes. Feature tests that
+# run against sqlite and an array cache would not catch the partial unique index
+# or the Redis lock — which are two of the three guardrails around double billing.
+feature:
+  stage: test
+  services:
+    - name: postgres:17-alpine
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    POSTGRES_DB: billing_test
+    POSTGRES_USER: billing
+    POSTGRES_PASSWORD: secret
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: "5432"
+    DB_DATABASE: billing_test
+    DB_USERNAME: billing
+    DB_PASSWORD: secret
+    CACHE_STORE: redis
+    REDIS_HOST: redis
+    QUEUE_CONNECTION: sync
+  script:
+    - cp .env.example .env
+    - php artisan key:generate
+    - php artisan test --testsuite=Feature
+
+coverage:
+  stage: test
+  script:
+    - pecl install pcov > /dev/null && docker-php-ext-enable pcov
+    - php artisan test --coverage --min=80 --coverage-cobertura=coverage.xml
+  coverage: '/^\s*Total:\s*(\d+\.\d+)\s*%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+security:
+  stage: test
+  script:
+    - composer audit --locked
+
+# ----------------------------------------------------------------- build
+
+# Proves the image builds. It is not pushed anywhere — this project has no
+# deployment target, and a push job that goes nowhere is theatre.
+docker-build:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  before_script: []
+  script:
+    - docker build --target production -f docker/Dockerfile -t portfolio-billing:$CI_COMMIT_SHORT_SHA .
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

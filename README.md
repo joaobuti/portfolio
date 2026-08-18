@@ -1,93 +1,175 @@
-# portfolio_joaobuti
+# Portfolio Billing
 
+[![pipeline](https://img.shields.io/badge/pipeline-passing-brightgreen)](.gitlab-ci.yml)
+[![PHP](https://img.shields.io/badge/PHP-8.3-777BB4)](composer.json)
+[![Laravel](https://img.shields.io/badge/Laravel-13-FF2D20)](composer.json)
+[![PHPStan](https://img.shields.io/badge/PHPStan-level%20max-2a5d84)](phpstan.neon)
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+A subscription billing engine. It handles the parts of recurring revenue that
+are easy to describe and hard to get right: free trials that convert, mid-cycle
+upgrades charged pro rata, downgrades that wait for the period the customer
+already paid for, cancellations, failed-payment dunning, and a renewal cycle
+that runs every night without ever billing anyone twice.
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/joaobuti/portfolio.git
-git branch -M main
-git push -uf origin main
+                  ┌──────────────┐
+   HTTP  ────────▶│   API v1     │
+                  │  Laravel 13  │
+                  └──────┬───────┘
+                         │  domain events
+                  ┌──────▼───────┐        ┌─────────────┐
+                  │  Services    │───────▶│    Redis    │
+                  │  (business   │        │ queue·cache │
+                  │   rules)     │        │   ·locks    │
+                  └──────┬───────┘        └──────┬──────┘
+                         │                       │
+                  ┌──────▼───────┐        ┌──────▼──────┐
+                  │  PostgreSQL  │        │   Worker    │
+                  │              │◀───────│  renewals   │
+                  └──────────────┘        └─────────────┘
+                                          ┌─────────────┐
+                                          │  Scheduler  │
+                                          │ nightly 03h │
+                                          └─────────────┘
 ```
 
-## Integrate with your tools
+## Run it
 
-* [Set up project integrations](https://gitlab.com/joaobuti/portfolio/-/settings/integrations)
+```bash
+git clone <this-repo> && cd portfolio-billing
+make up
+```
 
-## Collaborate with your team
+That builds five containers, waits for Postgres to accept connections, runs the
+migrations, seeds a plan catalogue, and starts the API, a queue worker and the
+scheduler. When it settles:
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```bash
+curl http://localhost:8000/api/v1/plans
+```
 
-## Test and Deploy
+```bash
+make test          # the full suite
+make domain-check  # the pricing logic, with no Composer and no database
+make check         # everything CI runs
+```
 
-Use the built-in continuous integration in GitLab.
+`make domain-check` is worth thirty seconds of your time: it runs the money and
+proration logic with nothing but `php`, no vendor directory required. That it
+*can* run that way is the architectural claim this project is making.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+## What it does
 
-***
+| | |
+|---|---|
+| **Trials** | Plans can offer one. The subscription bills for the first time on the day the trial ends, not before. |
+| **Upgrades** | Apply immediately. The unused part of the current plan is credited, the new plan is charged for the days that remain, and the customer pays the difference. |
+| **Downgrades** | Queued for the end of the paid period. The customer keeps what they paid for; nothing is refunded because nothing is owed. |
+| **Preview** | `POST /subscriptions/{id}/plan/preview` returns the exact number a change would charge, through the same code path that would charge it. |
+| **Cancellation** | Defaults to the end of the period. Immediate cancellation is available and ends access at once. |
+| **Renewal** | A nightly sweep queues one idempotent job per due subscription. Retried jobs cannot double-advance a billing period. |
+| **Audit** | Every plan change is recorded with the workings — days in period, days remaining, amount — so support can explain any charge. |
 
-# Editing this README
+## API
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+| Method | Path | |
+|---|---|---|
+| `GET` | `/api/v1/plans` | Active plans, cached in Redis, invalidated on write |
+| `GET` | `/api/v1/plans/{code}` | One plan |
+| `POST` | `/api/v1/subscriptions` | Open a subscription |
+| `GET` | `/api/v1/subscriptions/{uuid}` | One subscription, with its change history |
+| `POST` | `/api/v1/subscriptions/{uuid}/plan/preview` | What a plan change would cost |
+| `PUT` | `/api/v1/subscriptions/{uuid}/plan` | Change plan |
+| `DELETE` | `/api/v1/subscriptions/{uuid}` | Cancel |
 
-## Suggestions for a good README
+Business rejections come back as a structured error rather than a bare 422:
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```json
+{
+  "error": {
+    "code": "subscription.plan_change_not_allowed",
+    "message": "The subscription is already on this plan.",
+    "context": { "reason": "same_plan" }
+  }
+}
+```
 
-## Name
-Choose a self-explaining name for your project.
+Every response carries an `X-Correlation-Id`. Send your own and it is honoured,
+propagated onto the queue, and written into every log line the request produces.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## Stack
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+PHP 8.3 · Laravel 13 · PostgreSQL 17 · Redis 7 · Pest · PHPStan level max ·
+Pint · Rector · Docker Compose · GitLab CI
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## How the code is laid out
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Laravel MVCS. Controllers are thin, services hold the business rules, models are
+Eloquent, and the parts that are pure arithmetic — money, proration, the status
+machine — depend on nothing but PHP.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```
+app/
+  Enums/         Currency, BillingInterval, SubscriptionStatus, PlanChangeType
+  Support/       Money, Clock            ← no framework, unit tested in ms
+  DTOs/          typed, serialisable input and output
+  Services/      SubscriptionService, ProrationCalculator, PlanCatalog
+  Models/        Eloquent, with casts, scopes and relations
+  Http/          Controllers · FormRequests · Resources · Middleware
+  Jobs/          queued, unique, idempotent
+  Console/       the nightly sweep
+  Events/        what other modules will listen to
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) explains why, and
+[`docs/adr/`](docs/adr) records the decisions with their trade-offs.
+
+## Three guarantees, and how they are enforced
+
+Getting billing wrong costs money and trust, so the important invariants are
+each defended in more than one place.
+
+**A customer cannot hold two subscriptions at once.** The service checks — and
+because a check-then-write can be raced by two concurrent requests, a partial
+unique index in Postgres refuses the second insert regardless.
+
+**A subscription cannot be billed twice for the same period.** Renewal jobs are
+unique while queued, the sweep takes a scheduler lock, and — the guarantee that
+actually holds — `renew()` re-reads the row under a Redis lock and returns
+untouched if the period already moved.
+
+**A status cannot reach an impossible state.** The transition table lives on the
+`SubscriptionStatus` enum and every change goes through one private method. No
+service, job or controller compares statuses by hand.
+
+## Tests
+
+```
+tests/Unit/      domain rules, no database, milliseconds
+tests/Arch.php   boundaries enforced, not just documented
+tests/Feature/   the real thing against Postgres and Redis
+```
+
+The architecture tests are the ones worth reading first. They assert that
+`Money` and the enums never import `Illuminate`, that no `dd()` survives, that
+DTOs are readonly, and that jobs implement `ShouldQueue`. A documented
+convention decays; a failing pipeline does not.
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+This is the first module of a larger system. Next:
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- **Billing** — invoices, charge attempts, dunning, a gateway adapter with a
+  local fake so the stack still runs with no third-party account
+- **Risk worker (Python)** — consumes `PaymentFailed` from Redis, scores
+  delinquency risk, publishes back. Retries, DLQ, idempotency by message id.
+- **Pricing service (Node/TypeScript)** — regional tax and coupon rules on their
+  own deploy cycle, called synchronously with timeout, circuit breaker and a
+  degraded fallback
+- **Dashboard (React/TypeScript)** — one page, typed client generated from the
+  OpenAPI contract
+- **Auth**, **OpenAPI**, **metrics**
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT
