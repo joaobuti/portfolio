@@ -14,7 +14,12 @@ parameters:
     # noise from Eloquent's dynamic surface, and each is listed individually
     # rather than silenced with a blanket ignore.
     ignoreErrors:
-        - identifier: missingType.generics
+        # Larastan infers `definition()` as returning the model's own property
+        # names, a type that cannot be written in a docblock — the phpdoc parser
+        # rejects `array<model property of X, mixed>`. So the only way to satisfy
+        # it is to say nothing, and the only way to keep level max is to name the
+        # exception here. Every factory in the project hits it identically.
+        - identifier: method.childReturnType
           path: database/factories/*
 
     checkModelProperties: true

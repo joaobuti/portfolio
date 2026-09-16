@@ -61,6 +61,46 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Regional tax and coupon rules, on their own deploy cycle. The billing core
+  # calls it synchronously and degrades if it is missing, so `docker compose up
+  # --scale pricing=0` is a supported way to see the fallback in action.
+  pricing:
+    build:
+      context: ./services/pricing
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/pricing/src:/app/src
+    ports:
+      - "${PRICING_PORT:-3001}:3000"
+    environment:
+      PORT: 3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Scores delinquency risk from PaymentFailed. Consumes a Redis list, not a
+  # pub/sub channel — see ADR-0003. Safe to scale: claims are atomic and
+  # handling is idempotent by message id.
+  risk-worker:
+    build:
+      context: ./services/risk-worker
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/risk-worker/src:/app/src
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RISK_EVENTS_KEY: risk:events
+      RISK_SCORES_KEY: risk:scores
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
     image: postgres:17-alpine
     environment:

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
@@ -177,6 +179,33 @@ return [
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
             'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
+        ],
+
+        /*
+        | Cross-service messaging, with **no key prefix**.
+        |
+        | The prefix above namespaces Laravel's own keys — cache entries,
+        | queues, locks — so several apps can share one Redis without colliding.
+        | It must not reach a key that another service reads: `risk:events` is a
+        | contract with the Python worker, and silently publishing to
+        | `portfolio-billing-database-risk:events` means the worker blocks
+        | forever on a list nobody writes to.
+        |
+        | That failure is invisible to either side's tests. Both suites pass;
+        | nothing is delivered. It is only findable end to end, which is why
+        | this connection exists rather than a comment asking people to
+        | remember.
+        */
+        'messaging' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_DB', '0'),
+            'options' => [
+                'prefix' => '',
+            ],
         ],
 
     ],

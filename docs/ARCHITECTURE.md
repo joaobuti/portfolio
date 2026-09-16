@@ -130,6 +130,31 @@ stable machine-readable code, an HTTP status and a context payload. One rule in
 touching the HTTP layer, and API clients branch on `error.code` rather than
 string-matching a message that might be translated tomorrow.
 
+## Authentication and authorisation
+
+Sanctum bearer tokens, with **three checks that are deliberately independent**:
+
+```
+    auth:sanctum          is this a real caller?          route middleware
+    abilities:…           does this credential carry      route middleware
+                          the power for this action?
+    SubscriptionPolicy    is this your data?              policy
+```
+
+The third is the one that matters most and the one that was missing entirely
+until now: every route used to be open, and `GET /subscriptions/{uuid}` handed
+any subscription to anyone who knew a uuid.
+
+Ownership has exactly one definition — `User::canActOnCustomerId()` — and every
+policy method reduces to it, so adding a role changes `UserRole` and nothing
+else. Keeping scope out of the policy is what produces the correct answer in
+the awkward case: a user who *owns* a subscription is still refused if their
+token was issued read-only.
+
+A `User` is not a `Customer`. One is an account that authenticates; the other is
+who gets charged. See [ADR-0006](adr/0006-sanctum-tokens-abilities-and-ownership.md),
+which also covers the enumeration and timing decisions.
+
 ## Observability
 
 A correlation id is generated (or accepted) at the edge, stored in Laravel's
@@ -149,7 +174,9 @@ correlation id designed in is a header.
   it returns.
 - **A generic repository.** Eloquent is already the repository. Wrapping it to
   swap it for something that will never arrive is ceremony.
-- **Auth.** It belongs to its own module. `authorize()` returning `true` with a
-  comment saying so is more honest than a permission check that checks nothing.
+- **Registration, password reset, email verification.** This module issues
+  tokens for accounts that already exist. Provisioning belongs with whatever
+  owns the customer lifecycle. (Authentication itself is no longer absent — see
+  below.)
 - **A baseline file for PHPStan.** A baseline is a promise to fix things later
   that nobody keeps. This starts at level max.

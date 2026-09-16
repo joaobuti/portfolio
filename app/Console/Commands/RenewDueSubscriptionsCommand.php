@@ -69,7 +69,7 @@ final class RenewDueSubscriptionsCommand extends Command
         $this->components->info(
             $dryRun
                 ? "{$queued} subscription(s) would be queued."
-                : "{$queued} renewal job(s) queued."
+                : "{$queued} renewal job(s) queued.",
         );
 
         Log::info('Subscription renewal sweep finished', [

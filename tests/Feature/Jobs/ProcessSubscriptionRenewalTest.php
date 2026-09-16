@@ -6,7 +6,7 @@ use App\Jobs\Subscriptions\ProcessSubscriptionRenewal;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Services\Subscriptions\SubscriptionService;
-use Illuminate\Support\CarbonImmutable;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
 beforeEach(function (): void {

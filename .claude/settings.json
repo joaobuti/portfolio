@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh -o StrictHostKeyChecking=accept-new -T git@gitlab.com)",
+      "Bash(echo \"=== exit: $? ===\")",
+      "Bash(git fetch *)",
+      "Bash(git remote *)",
+      "Bash(echo \"glab: $?\")",
+      "Bash(git branch *)",
+      "Bash(git update-ref *)",
+      "Bash(grep -iE '\\\\.\\(py|js|jsx|ts|tsx|mjs|cjs|vue|ipynb\\)$|requirements|pyproject|package\\\\.json|pipfile|poetry')",
+      "Bash(grep -iE '\\\\.\\(py|js|jsx|ts|tsx|vue\\)$|requirements|pyproject|package\\\\.json')",
+      "Bash(timeout 20 docker ps)",
+      "Bash(xargs -r docker kill)",
+      "Bash(sudo chown -R buti:buti node_modules dist package-lock.json)",
+      "Bash(chown -R buti:buti node_modules dist package-lock.json)",
+      "Bash(git rm *)",
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Bash(xargs sed -i 's|use Illuminate\\\\\\\\Support\\\\\\\\CarbonImmutable;|use Carbon\\\\\\\\CarbonImmutable;|')",
+      "Bash(sed -n '/app\\\\/Services\\\\/Pricing\\\\/CircuitBreaker/,/^ ---/p' /tmp/claude-1000/-home-projetos-portfolio-billing/643153f4-d738-41ee-b61e-37103c755339/scratchpad/phpstan.log)",
+      "Bash(sed -n '/app\\\\/Services\\\\/Pricing\\\\/HttpPricingClient/,/^ ---/p' /tmp/claude-1000/-home-projetos-portfolio-billing/643153f4-d738-41ee-b61e-37103c755339/scratchpad/phpstan.log)",
+      "Bash(timeout 400 docker build -q --target production -t pricing-verify .)",
+      "Bash(curl -s http://127.0.0.1:13001/health)",
+      "Bash(curl -s -X POST http://127.0.0.1:13001/v1/quote -H 'content-type: application/json' -d '{\"amountMinorUnits\":4990,\"currency\":\"BRL\",\"region\":\"BR-SP\",\"couponCode\":\"WELCOME10\"}')",
+      "Bash(awk '{print $1}')",
+      "Bash(grep -rn 'getRouteKeyName\\\\|protected $hidden' app/Models/)",
+      "Bash(command -v python3)",
+      "Bash(command -v pip3)",
+      "Bash(sed -n '/^## Stack/,/^## How the code/p' README.md)",
+      "Bash(sed -n '/^## Roadmap/,/^## License/p' README.md)"
+    ]
+  }
+}

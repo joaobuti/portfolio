@@ -43,7 +43,7 @@ describe('arithmetic', function (): void {
         expect(
             Money::ofMajor('10.00', Currency::BRL)
                 ->subtract(Money::ofMajor('30.00', Currency::BRL))
-                ->toDecimal()
+                ->toDecimal(),
         )->toBe('-20.00');
     });
 });

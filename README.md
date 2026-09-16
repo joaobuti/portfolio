@@ -99,8 +99,14 @@ propagated onto the queue, and written into every log line the request produces.
 
 ## Stack
 
-PHP 8.3 · Laravel 13 · PostgreSQL 17 · Redis 7 · Pest · PHPStan level max ·
-Pint · Rector · Docker Compose · GitLab CI
+**Billing core** — PHP 8.3 · Laravel 13 · PostgreSQL 17 · Redis 7 · Pest ·
+PHPStan level max · Pint · Rector
+
+**Pricing service** — Node 22 · TypeScript strict · zero runtime dependencies
+
+**Risk worker** — Python 3.12 · mypy strict · ruff · pytest
+
+Docker Compose · GitLab CI
 
 ## How the code is laid out
 
@@ -157,18 +163,29 @@ convention decays; a failing pipeline does not.
 
 ## Roadmap
 
-This is the first module of a larger system. Next:
+This is the first module of a larger system.
 
-- **Billing** — invoices, charge attempts, dunning, a gateway adapter with a
-  local fake so the stack still runs with no third-party account
-- **Risk worker (Python)** — consumes `PaymentFailed` from Redis, scores
-  delinquency risk, publishes back. Retries, DLQ, idempotency by message id.
+**Built**
+
+- **Auth** — Sanctum tokens, ability scopes, ownership policies.
+  [ADR-0006](docs/adr/0006-sanctum-tokens-abilities-and-ownership.md)
 - **Pricing service (Node/TypeScript)** — regional tax and coupon rules on their
   own deploy cycle, called synchronously with timeout, circuit breaker and a
-  degraded fallback
+  degraded fallback. [ADR-0005](docs/adr/0005-synchronous-pricing-with-a-degraded-fallback.md)
+- **Billing** — invoices, charge attempts, a scheduled dunning sweep, and a
+  deterministic fake gateway so the stack runs with no third-party account.
+  [ADR-0007](docs/adr/0007-invoices-charge-attempts-and-dunning.md)
+- **Risk worker (Python)** — consumes `PaymentFailed` off a Redis list, scores
+  delinquency risk, publishes back. At-least-once delivery, idempotency by
+  message id, dead-lettering.
+  [ADR-0008](docs/adr/0008-python-risk-worker-over-a-redis-list.md)
+
+**Next**
+
+- **OpenAPI** — the contract the dashboard's client is generated from.
+- **Metrics** — independent of everything else.
 - **Dashboard (React/TypeScript)** — one page, typed client generated from the
-  OpenAPI contract
-- **Auth**, **OpenAPI**, **metrics**
+  OpenAPI contract. *Blocked on OpenAPI.*
 
 ## License
 

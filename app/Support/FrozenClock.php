@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use Illuminate\Support\CarbonImmutable;
+use Carbon\CarbonImmutable;
 
 /**
  * A clock that does not move, for tests and for the `--as-of` flag on the

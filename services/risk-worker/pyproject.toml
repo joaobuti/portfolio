@@ -1,0 +1,35 @@
+[project]
+name = "risk-worker"
+version = "0.1.0"
+description = "Scores delinquency risk from billing payment failures."
+requires-python = ">=3.12"
+dependencies = ["redis==5.2.1"]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.4", "mypy==1.14.1", "ruff==0.8.6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+strict = true
+# The redis package ships partial stubs; strict mode on our own code is the
+# point, not on someone else's.
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]

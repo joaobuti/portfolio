@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Events\Subscriptions;
 
 use App\Models\Subscription;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\CarbonImmutable;
 
 final class SubscriptionRenewed
 {

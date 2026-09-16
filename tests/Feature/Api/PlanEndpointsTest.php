@@ -7,6 +7,12 @@ use App\Services\Subscriptions\PlanCatalog;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+// The plan catalogue is behind auth like everything else: the price list is
+// not public in a billing API. Staff, since plans are not customer-scoped.
+beforeEach(function (): void {
+    actingAsStaff();
+});
+
 it('lists only active plans, in display order', function (): void {
     Plan::factory()->priced('99.90')->create(['code' => 'pro', 'sort_order' => 2]);
     Plan::factory()->priced('29.90')->create(['code' => 'basic', 'sort_order' => 1]);

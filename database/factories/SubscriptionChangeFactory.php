@@ -10,8 +10,8 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\SubscriptionChange;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\CarbonImmutable;
 
 /**
  * @extends Factory<SubscriptionChange>

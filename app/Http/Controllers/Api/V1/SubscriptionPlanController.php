@@ -7,7 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\DTOs\Subscriptions\ChangePlanData;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ChangePlanRequest;
-use App\Http\Resources\ProrationResource;
+use App\Http\Resources\PricedChangeResource;
 use App\Http\Resources\SubscriptionResource;
 use App\Models\Subscription;
 use App\Services\Subscriptions\SubscriptionService;
@@ -30,12 +30,13 @@ final class SubscriptionPlanController extends Controller
      * Safe to call as often as the UI likes — it writes nothing and shares its
      * arithmetic with `update()`, so the number shown is the number billed.
      */
-    public function preview(ChangePlanRequest $request, Subscription $subscription): ProrationResource
+    public function preview(ChangePlanRequest $request, Subscription $subscription): PricedChangeResource
     {
-        return ProrationResource::make(
-            $this->subscriptions->previewPlanChange(
+        return PricedChangeResource::make(
+            $this->subscriptions->quotePlanChange(
                 $subscription,
                 $request->string('plan')->toString(),
+                $request->filled('coupon') ? $request->string('coupon')->toString() : null,
             ),
         );
     }

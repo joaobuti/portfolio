@@ -6,8 +6,13 @@ namespace App\Models;
 
 use App\Casts\MoneyCast;
 use App\Enums\BillingInterval;
+use App\Observers\PlanObserver;
 use App\Support\Money;
 use Database\Factories\PlanFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -30,6 +35,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $sort_order
  * @property-read \Illuminate\Database\Eloquent\Collection<int, Subscription> $subscriptions
  */
+#[ObservedBy([PlanObserver::class])]
+#[Fillable([
+    'code',
+    'name',
+    'description',
+    'amount',
+    'interval',
+    'trial_days',
+    'is_active',
+    'features',
+    'sort_order',
+])]
+#[RouteKey('code')]
 final class Plan extends Model
 {
     /** @use HasFactory<PlanFactory> */
@@ -37,26 +55,30 @@ final class Plan extends Model
 
     use HasUuids;
 
-    protected $fillable = [
-        'code',
-        'name',
-        'description',
-        'amount',
-        'interval',
-        'trial_days',
-        'is_active',
-        'features',
-        'sort_order',
-    ];
-
+    /**
+     * @return list<string>
+     */
     public function uniqueIds(): array
     {
         return ['uuid'];
     }
 
-    public function getRouteKeyName(): string
+    /**
+     * @return HasMany<Subscription, $this>
+     */
+    public function subscriptions(): HasMany
     {
-        return 'code';
+        return $this->hasMany(Subscription::class);
+    }
+
+    public function offersTrial(): bool
+    {
+        return $this->trial_days > 0;
+    }
+
+    public function isMoreExpensiveThan(self $other): bool
+    {
+        return $this->amount->greaterThan($other->amount);
     }
 
     /**
@@ -75,17 +97,10 @@ final class Plan extends Model
     }
 
     /**
-     * @return HasMany<Subscription, $this>
-     */
-    public function subscriptions(): HasMany
-    {
-        return $this->hasMany(Subscription::class);
-    }
-
-    /**
      * @param  Builder<$this>  $query
      */
-    public function scopeActive(Builder $query): void
+    #[Scope]
+    protected function active(Builder $query): void
     {
         $query->where('is_active', true);
     }
@@ -93,18 +108,9 @@ final class Plan extends Model
     /**
      * @param  Builder<$this>  $query
      */
-    public function scopeOrdered(Builder $query): void
+    #[Scope]
+    protected function ordered(Builder $query): void
     {
         $query->orderBy('sort_order')->orderBy('amount_cents');
-    }
-
-    public function offersTrial(): bool
-    {
-        return $this->trial_days > 0;
-    }
-
-    public function isMoreExpensiveThan(self $other): bool
-    {
-        return $this->amount->greaterThan($other->amount);
     }
 }

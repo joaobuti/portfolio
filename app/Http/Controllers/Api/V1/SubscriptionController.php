@@ -44,8 +44,14 @@ final class SubscriptionController extends Controller
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
+    /**
+     * No FormRequest here — there is nothing to validate — so the ownership
+     * check lives in the one place left that runs before the response.
+     */
     public function show(Subscription $subscription): SubscriptionResource
     {
+        $this->authorize('view', $subscription);
+
         return SubscriptionResource::make(
             $subscription->load(['plan', 'pendingPlan', 'changes.fromPlan', 'changes.toPlan']),
         );

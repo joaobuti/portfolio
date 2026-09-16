@@ -31,7 +31,7 @@ it('keeps the time of day so billing does not drift', function (): void {
     expect(
         BillingInterval::Monthly
             ->advance(new DateTimeImmutable('2026-03-10 14:35:07'))
-            ->format('Y-m-d H:i:s')
+            ->format('Y-m-d H:i:s'),
     )->toBe('2026-04-10 14:35:07');
 });
 

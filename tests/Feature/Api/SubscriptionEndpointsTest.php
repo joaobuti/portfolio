@@ -7,12 +7,18 @@ use App\Http\Middleware\AssignCorrelationId;
 use App\Models\Customer;
 use App\Models\Plan;
 use App\Models\Subscription;
-use Illuminate\Support\CarbonImmutable;
+use Carbon\CarbonImmutable;
 
 beforeEach(function (): void {
     freezeClockAt('2026-06-16 09:00:00');
 
     $this->customer = Customer::factory()->create();
+
+    // These tests are about subscription behaviour, not authorisation, so they
+    // run as a user who legitimately owns the customer under test. Who may
+    // reach whose data is asserted in SubscriptionAuthorizationTest.
+    $this->user = actingAsCustomerUser($this->customer);
+
     $this->basic = Plan::factory()->priced('29.90')->create(['code' => 'basic']);
     $this->pro = Plan::factory()->priced('99.90')->create(['code' => 'pro']);
 });
@@ -91,6 +97,12 @@ describe('plan changes', function (): void {
     });
 
     it('queues a downgrade and says so in the payload', function (): void {
+        // Its own customer, because this block's beforeEach already gave
+        // $this->customer an active subscription and the partial unique index
+        // permits exactly one. Staff, so the test stays about downgrade
+        // mechanics rather than about who owns what.
+        actingAsStaff();
+
         $subscription = Subscription::factory()
             ->for(Customer::factory())
             ->for($this->pro, 'plan')

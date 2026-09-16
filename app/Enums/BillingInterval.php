@@ -40,7 +40,14 @@ enum BillingInterval: string
         $year = (int) $from->format('Y') + intdiv($month - 1, 12);
         $month = (($month - 1) % 12) + 1;
 
-        $lastDayOfTargetMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
+        // Built from a date rather than from mktime(), which returns
+        // `int|false` and would hand `date()` a false on any input it dislikes
+        // — silently yielding the length of the current month instead of the
+        // target one, which is exactly the class of bug this method exists to
+        // prevent.
+        $lastDayOfTargetMonth = (int) $from
+            ->setDate($year, $month, 1)
+            ->format('t');
 
         return $from->setDate($year, $month, min($day, $lastDayOfTargetMonth));
     }

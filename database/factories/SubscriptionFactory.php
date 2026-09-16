@@ -8,8 +8,8 @@ use App\Enums\SubscriptionStatus;
 use App\Models\Customer;
 use App\Models\Plan;
 use App\Models\Subscription;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\CarbonImmutable;
 
 /**
  * @extends Factory<Subscription>

@@ -6,7 +6,7 @@ use App\Enums\SubscriptionStatus;
 use App\Jobs\Subscriptions\ProcessSubscriptionRenewal;
 use App\Models\Plan;
 use App\Models\Subscription;
-use Illuminate\Support\CarbonImmutable;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Queue;
 
 beforeEach(function (): void {

@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Models\Customer;
+use App\Models\User;
 use App\Support\Clock;
 use App\Support\FrozenClock;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)
@@ -16,6 +19,39 @@ pest()->extend(TestCase::class)
     // the array store. Without this, one test's plans leak into the next.
     ->beforeEach(fn () => Cache::flush())
     ->in('Feature');
+
+/**
+ * Authenticate as a staff user — one that may act on any customer.
+ *
+ * The default `['*']` grants every ability, because most tests are about
+ * something other than scoping. Tests that *are* about scoping pass an explicit
+ * list, and that asymmetry is intentional: it keeps the ability assertions in
+ * the handful of tests that mean them rather than spread across all of them.
+ *
+ * @param  list<string>  $abilities
+ */
+function actingAsStaff(array $abilities = ['*']): User
+{
+    $user = User::factory()->staff()->create();
+
+    Sanctum::actingAs($user, $abilities);
+
+    return $user;
+}
+
+/**
+ * Authenticate as a user bound to one customer — the self-service case.
+ *
+ * @param  list<string>  $abilities
+ */
+function actingAsCustomerUser(Customer $customer, array $abilities = ['*']): User
+{
+    $user = User::factory()->belongingTo($customer)->create();
+
+    Sanctum::actingAs($user, $abilities);
+
+    return $user;
+}
 
 /**
  * Pin the application clock for a test.

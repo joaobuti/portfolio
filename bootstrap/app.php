@@ -22,6 +22,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             App\Http\Middleware\AssignCorrelationId::class,
         ]);
+
+        // Sanctum's ability guards, aliased so routes can read
+        // `abilities:subscriptions:write` instead of a class name. `abilities`
+        // requires all of them; `ability` requires any one.
+        $middleware->alias([
+            'abilities' => Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+            'ability' => Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

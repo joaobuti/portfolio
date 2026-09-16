@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -75,7 +77,6 @@ return [
             'formatter' => Monolog\Formatter\JsonFormatter::class,
             'replace_placeholders' => true,
         ],
-
 
         'stack' => [
             'driver' => 'stack',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Subscriptions;
 
+use App\DTOs\Pricing\PricedChange;
 use App\DTOs\Subscriptions\ChangePlanData;
 use App\DTOs\Subscriptions\CreateSubscriptionData;
 use App\DTOs\Subscriptions\ProrationResult;
@@ -20,10 +21,11 @@ use App\Exceptions\Subscriptions\PlanChangeNotAllowedException;
 use App\Models\Customer;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Services\Pricing\PricingClient;
 use App\Support\Clock;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Closure;
-use Illuminate\Support\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -56,6 +58,7 @@ final readonly class SubscriptionService
     public function __construct(
         private ProrationCalculator $proration,
         private Clock $clock,
+        private PricingClient $pricing,
     ) {}
 
     /**
@@ -110,6 +113,38 @@ final readonly class SubscriptionService
         $this->assertPlanChangeIsAllowed($subscription, $newPlan);
 
         return $this->prorateChange($subscription, $newPlan);
+    }
+
+    /**
+     * The same preview, with regional tax and coupons applied.
+     *
+     * A separate method rather than an argument on {@see previewPlanChange()}
+     * because the two have different failure profiles and different test
+     * needs: proration is local arithmetic that always succeeds, while this
+     * crosses a network and can come back degraded. Keeping them apart is what
+     * lets the proration tests stay dependency-free.
+     *
+     * The quote is taken on the **amount due**, which may be a credit. A
+     * negative amount is taxed symmetrically by the pricing service — see
+     * ADR-0005.
+     *
+     * @throws PlanChangeNotAllowedException
+     */
+    public function quotePlanChange(
+        Subscription $subscription,
+        string $planCode,
+        ?string $couponCode = null,
+    ): PricedChange {
+        $proration = $this->previewPlanChange($subscription, $planCode);
+
+        return new PricedChange(
+            proration: $proration,
+            quote: $this->pricing->quote(
+                amount: $proration->amountDue,
+                region: $this->defaultRegion(),
+                couponCode: $couponCode,
+            ),
+        );
     }
 
     /**
@@ -251,7 +286,14 @@ final readonly class SubscriptionService
                 }
 
                 $subscription->current_period_start = $previousPeriodEnd;
-                $subscription->current_period_end = $subscription->plan->interval->advance($previousPeriodEnd);
+
+                // Wrapped rather than assigned straight through: the enum
+                // deals in plain DateTimeImmutable so it stays framework-free
+                // (see tests/Arch.php), while the model's attribute is a
+                // CarbonImmutable. The conversion belongs here, at the seam.
+                $subscription->current_period_end = CarbonImmutable::instance(
+                    $subscription->plan->interval->advance($previousPeriodEnd),
+                );
                 $subscription->save();
             });
 
@@ -259,29 +301,6 @@ final readonly class SubscriptionService
 
             return $subscription;
         });
-    }
-
-    /**
-     * Mark a subscription as ended. Terminal.
-     *
-     * Private because the caller must already hold the subscription's lock —
-     * `renew()` is the only path that ends a subscription this way, and the
-     * Redis lock is not reentrant, so a public wrapper that locked again would
-     * deadlock against its own caller. Customer-initiated termination goes
-     * through `cancel()`.
-     */
-    private function expire(Subscription $subscription): Subscription
-    {
-        DB::transaction(function () use ($subscription): void {
-            $this->transitionTo($subscription, SubscriptionStatus::Expired);
-            $subscription->ended_at = $this->clock->now();
-            $subscription->pending_plan_id = null;
-            $subscription->save();
-        });
-
-        SubscriptionExpired::dispatch($subscription->refresh());
-
-        return $subscription;
     }
 
     /**
@@ -316,6 +335,44 @@ final readonly class SubscriptionService
 
             return $subscription->refresh();
         });
+    }
+
+    /**
+     * Which tax region to price against.
+     *
+     * The billing core has no customer address yet, so every subscription gets
+     * the configured default. This is a method rather than an inlined config
+     * read so that when the address arrives, one body changes and the call
+     * site above does not — it will simply start taking the subscription.
+     */
+    private function defaultRegion(): string
+    {
+        $region = config('pricing.default_region');
+
+        return is_string($region) ? $region : '';
+    }
+
+    /**
+     * Mark a subscription as ended. Terminal.
+     *
+     * Private because the caller must already hold the subscription's lock —
+     * `renew()` is the only path that ends a subscription this way, and the
+     * Redis lock is not reentrant, so a public wrapper that locked again would
+     * deadlock against its own caller. Customer-initiated termination goes
+     * through `cancel()`.
+     */
+    private function expire(Subscription $subscription): Subscription
+    {
+        DB::transaction(function () use ($subscription): void {
+            $this->transitionTo($subscription, SubscriptionStatus::Expired);
+            $subscription->ended_at = $this->clock->now();
+            $subscription->pending_plan_id = null;
+            $subscription->save();
+        });
+
+        SubscriptionExpired::dispatch($subscription->refresh());
+
+        return $subscription;
     }
 
     /**

@@ -114,6 +114,92 @@ security:
   script:
     - composer audit --locked
 
+# --------------------------------------------------------- pricing service
+
+# The Node service is a separate deployable with its own toolchain, so its jobs
+# override the PHP `default` block entirely rather than inheriting a before
+# script that installs Composer for nothing.
+#
+# It has no runtime dependencies, so `npm ci` installs TypeScript and nothing
+# else — which is why these jobs finish in seconds and are not cached.
+
+pricing:typecheck:
+  stage: analyse
+  image: node:22-alpine
+  before_script:
+    - cd services/pricing
+    - npm ci --no-audit --no-fund
+  cache: {}
+  script:
+    - npm run typecheck
+  rules:
+    - changes:
+        - services/pricing/**/*
+
+pricing:test:
+  stage: test
+  image: node:22-alpine
+  before_script:
+    - cd services/pricing
+    - npm ci --no-audit --no-fund
+  cache: {}
+  script:
+    - npm test
+  rules:
+    - changes:
+        - services/pricing/**/*
+
+# ------------------------------------------------------------ risk worker
+
+# Python, so it overrides the PHP `default` block entirely. The consumer tests
+# run against a real Redis service rather than a fake: atomic claim,
+# idempotency under a race and orphan recovery are properties of Redis itself,
+# and a mock would only prove the mock behaves as its author imagined.
+
+risk:lint:
+  stage: lint
+  image: python:3.12-alpine
+  before_script:
+    - cd services/risk-worker
+    - pip install -q -e ".[dev]"
+  cache: {}
+  script:
+    - python -m ruff check .
+  rules:
+    - changes:
+        - services/risk-worker/**/*
+
+risk:typecheck:
+  stage: analyse
+  image: python:3.12-alpine
+  before_script:
+    - cd services/risk-worker
+    - pip install -q -e ".[dev]"
+  cache: {}
+  script:
+    - python -m mypy src tests
+  rules:
+    - changes:
+        - services/risk-worker/**/*
+
+risk:test:
+  stage: test
+  image: python:3.12-alpine
+  services:
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    REDIS_URL: redis://redis:6379/15
+  before_script:
+    - cd services/risk-worker
+    - pip install -q -e ".[dev]"
+  cache: {}
+  script:
+    - python -m pytest -q
+  rules:
+    - changes:
+        - services/risk-worker/**/*
+
 # ----------------------------------------------------------------- build
 
 # Proves the image builds. It is not pushed anywhere — this project has no
@@ -126,5 +212,7 @@ docker-build:
   before_script: []
   script:
     - docker build --target production -f docker/Dockerfile -t portfolio-billing:$CI_COMMIT_SHORT_SHA .
+    - docker build --target production -f services/pricing/Dockerfile -t portfolio-pricing:$CI_COMMIT_SHORT_SHA services/pricing
+    - docker build --target production -f services/risk-worker/Dockerfile -t portfolio-risk-worker:$CI_COMMIT_SHORT_SHA services/risk-worker
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

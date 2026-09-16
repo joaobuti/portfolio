@@ -16,7 +16,7 @@ use App\Models\Customer;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Services\Subscriptions\SubscriptionService;
-use Illuminate\Support\CarbonImmutable;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Event;
 
 beforeEach(function (): void {
