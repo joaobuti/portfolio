@@ -1,11 +1,140 @@
-# Operational metrics
+# Operations
+
+## Local InfinitePay webhooks with Cloudflare Tunnel
+
+The development stack runs locally in Docker. A Cloudflare Quick Tunnel
+provides the public HTTPS entry point needed for a payment provider to reach
+the local webhook. This is the same workflow used for the local JBoot APIs;
+the port and callback path belong to each application, rather than the shared
+merchant account.
+
+| Address | Role |
+| --- | --- |
+| `http://localhost:8000` | Default host address for this Docker API |
+| `http://app:8000` | API address for services inside the Compose network |
+| `https://your-tunnel.trycloudflare.com` | Example public address; replace with the actual tunnel hostname |
+| `/api/v1/webhooks/infinitepay` | This application's POST notification endpoint |
+
+The Compose mapping is `${APP_PORT:-8000}:8000`: only the published host port
+changes when `APP_PORT` changes. Commands below run on the Docker host with
+`APP_PORT=8000`. If that port is already occupied, choose a free host port and
+update the local health check and tunnel origin accordingly.
+
+### 1. Start the local stack
+
+Install Docker Compose and [cloudflared](https://developers.cloudflare.com/tunnel/downloads/).
+Follow the repository's initial setup and keep the local `.env` untracked.
+Use synthetic data and disable debug output while exposing the application:
+
+```dotenv
+APP_PORT=8000
+APP_URL=http://localhost:8000
+APP_DEBUG=false
+BILLING_GATEWAY=fake
+```
+
+From the repository root:
+
+```bash
+docker compose up -d --build
+docker compose ps
+# Run after the app is healthy:
+curl --fail http://localhost:8000/up
+```
+
+Keep `app`, `worker` and `scheduler` running; payment verification uses the
+billing queue and its scheduled recovery sweep. The remaining Compose services
+provide the database, Redis, pricing and risk processing. Keeping the gateway
+as `fake` permits local development without creating real checkout links.
+
+### 2. Start the public tunnel
+
+Run on the same host, outside the application container, in another terminal:
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
+Keep that process running and copy the HTTPS hostname it prints. Quick Tunnels
+provide a temporary address without requiring your own domain or Cloudflare
+account. The hostname changes with a new tunnel and stops working when its
+process stops. They are intended for development, not stable production
+callbacks. See [Cloudflare's Quick Tunnel documentation](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
+
+The tunnel exposes the application's HTTP port. Private routes still require
+their normal bearer credentials and ownership checks. Avoid an interactive
+email challenge on the webhook path: the provider cannot complete browser
+login. The webhook accepts bounded identifiers and verifies payment separately.
+
+### 3. Configure the webhook and reload Laravel
+
+Replace the example hostname below with the actual generated hostname in the
+local `.env`:
+
+```dotenv
+INFINITEPAY_WEBHOOK_URL=https://your-tunnel.trycloudflare.com/api/v1/webhooks/infinitepay
+```
+
+For deliberate live checkout testing, configure `INFINITEPAY_HANDLE` and
+`INFINITEPAY_API_KEY` locally, then select `BILLING_GATEWAY=infinitepay`.
+The key enables this adapter's single-payment and expiry options. Never commit
+the key, environment file or tunnel credentials. `INFINITEPAY_REDIRECT_URL`
+is optional; leave it empty unless a browser-return endpoint actually exists.
+It is independent of the server notification URL.
+
+```bash
+docker compose exec app php artisan config:clear
+docker compose restart app worker scheduler
+```
+
+The restart reloads the environment in long-running workers and the scheduler.
+Wait for the app to become healthy again. `APP_URL` remains the local base URL;
+`INFINITEPAY_WEBHOOK_URL` explicitly supplies the public callback address.
+Creating a tunnel does not configure the environment automatically, activate
+the payment driver or create a payment.
+
+### 4. Verify delivery without creating a payment
+
+Replace the hostname and submit a deliberately unknown order:
+
+```bash
+curl --include --request POST \
+  https://your-tunnel.trycloudflare.com/api/v1/webhooks/infinitepay \
+  --header 'Content-Type: application/json' \
+  --data '{"order_nsu":"documentation-probe","transaction_nsu":"documentation-probe","invoice_slug":"documentation-probe"}'
+```
+
+Expected response: HTTP **202** with `{"status":"accepted"}`. Unknown orders
+are acknowledged and ignored; this checks public routing and request handling,
+not payment confirmation, account credentials or end-to-end settlement.
+The `/up` check and this unknown-order probe create no payment links or charges.
+
+There is [no InfinitePay sandbox](https://www.infinitepay.io/checkout-documentacao).
+The automated suite uses HTTP fakes. A real link/payment is a separate live
+financial operation, not a necessary step to verify tunnel routing.
+
+### Restarting or stopping the tunnel
+
+Each checkout stores the webhook URL used when its link was created. After a
+tunnel address changes, update the environment and reload the processes for
+**new** checkouts. Existing links continue to notify their old address. Do not
+delete their intents or recreate links automatically: that risks duplicate
+payment opportunities. Keep the original tunnel alive while exercising its
+links; reconcile missed notifications through the existing authenticated
+payment-check flow when the transaction and slug are available.
+
+Stop the tunnel with Ctrl+C after the demonstration. This closes its public
+entry point but does not cancel provider checkout links. A stable production
+webhook requires a persistent public address and appropriate deployment.
+
+## Operational metrics
 
 `GET /api/v1/metrics` provides a global, read-only snapshot of the Laravel
 billing database. It uses [Prometheus text exposition 0.0.4](https://prometheus.io/docs/instrumenting/exposition_formats/),
 with bounded status labels and a `text/plain; version=0.0.4; charset=utf-8`
 response. It does not call the pricing service, InfinitePay, or the risk worker.
 
-## Access and scraping
+### Access and scraping
 
 A staff account must issue a dedicated bearer token with **only** `metrics:read`.
 Use the normal `POST /api/v1/auth/tokens` flow and supply
@@ -42,7 +171,7 @@ wrong scope or role returns 403; the existing API limiter can return 429. A
 collection/cache/database error fails the scrape rather than reporting false
 zero values. Production must keep its existing `APP_DEBUG=false` setting.
 
-## Metric contract
+### Metric contract
 
 All metric names below start with `portfolio_billing_`. Every series is a
 **gauge**, representing current rows or timestamps, rather than a cumulative
@@ -90,6 +219,8 @@ measure MRR, revenue, refunds, partial payments, HTTP latency or infrastructure
 health across the Node/Python services. They introduce no financial policies.
 See [OpenAPI](openapi.json) for auth and response details, and
 [ADR-0010](adr/0010-operational-metrics.md) for the implementation decision.
+
+## Scheduled billing work
 
 The financial scheduler also runs `invoices:reprice-degraded` and
 `invoices:expire-adjustments` every minute, with hourly subscription renewal.

@@ -313,6 +313,57 @@ on a recurring schedule. Refunds remain excluded. The approved financial policie
 Tests use Laravel HTTP fakes; they do not create real links or payments.
 The shipped default remains `BILLING_GATEWAY=fake` until securely configured.
 
+### Local webhooks through an HTTPS tunnel
+
+The full stack can run locally in Docker while InfinitePay delivers payment
+notifications through a temporary Cloudflare Quick Tunnel. Docker publishes
+the Laravel API on **host port 8000 → container port 8000** by default;
+`APP_PORT` changes the host port. Run `cloudflared` on the same host:
+
+```bash
+docker compose up -d --build
+# Wait for the app to become healthy, then check the local origin:
+curl --fail http://localhost:8000/up
+# Keep this running in a separate terminal:
+cloudflared tunnel --url http://localhost:8000
+```
+
+Use the HTTPS hostname printed by `cloudflared` in your local `.env`:
+
+```dotenv
+INFINITEPAY_WEBHOOK_URL=https://your-tunnel.trycloudflare.com/api/v1/webhooks/infinitepay
+```
+
+Replace the example hostname with the generated one. `localhost` is the
+tunnel's origin; the webhook uses the public HTTPS address because InfinitePay
+sends the notification from its servers. `redirect_url` is a separate browser
+return flow. This follows the same local-tunnel workflow used by JBoot, with
+this project's own port and webhook route.
+
+```mermaid
+flowchart LR
+    IP[InfinitePay] -->|HTTPS notification| T[Cloudflare Quick Tunnel]
+    T -->|HTTP localhost:8000| API[Laravel in Docker]
+    API -->|Durable notification inbox| DB[PostgreSQL]
+    API -->|Enqueue verification| Q[Redis]
+    Q --> W[Billing worker]
+    W -->|Server-to-server payment_check| IP
+    W -->|Atomic settlement after verification| DB
+```
+
+The public address changes when a new Quick Tunnel is created. Existing
+checkout links retain their original webhook URL, so keep the tunnel running
+while testing those links. A callback only queues verification; settlement
+requires a successful server-to-server payment check. Automated tests use HTTP
+fakes. InfinitePay has no sandbox, so real checkout experiments require a
+deliberate live-payment setup.
+
+The [local webhook runbook](docs/OPERATIONS.md#local-infinitepay-webhooks-with-cloudflare-tunnel)
+covers prerequisites, credentials, configuration reload, a non-financial route
+probe and handling a changed tunnel address. This documents a development
+workflow; it does not imply that a public tunnel or production deployment is
+currently running.
+
 ## Monitoring
 
 `GET /api/v1/metrics` exposes read-only operational gauges for staff tokens
