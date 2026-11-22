@@ -11,11 +11,14 @@ final class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->isProduction()) {
+            return;
+        }
         $this->call(PlanSeeder::class);
 
-        Customer::factory()->create([
-            'name' => 'Cliente Demo',
-            'email' => 'demo@example.test',
-        ]);
+        Customer::query()->firstOrCreate(
+            ['email' => 'demo@example.test'],
+            ['name' => 'Cliente Demo'],
+        );
     }
 }

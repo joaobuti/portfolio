@@ -2,6 +2,20 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { quote } from './quote.js';
+import { AmountOverflowError } from './money.js';
+
+it('rejects positive and negative totals outside the safe integer range', () => {
+  for (const amountMinorUnits of [Number.MAX_SAFE_INTEGER - 1, -(Number.MAX_SAFE_INTEGER - 1)]) {
+    assert.throws(() => quote({ amountMinorUnits, currency: 'BRL', region: 'BR-SP' }), AmountOverflowError);
+  }
+});
+
+it('does not interpret Object prototype properties as coupons or tax rules', () => {
+  const result = quote({ amountMinorUnits: 1000, currency: 'BRL', region: '__proto__', couponCode: '__proto__' });
+  assert.equal(result.totalMinorUnits, 1000);
+  assert.equal(result.coupon?.applied, false);
+  assert.equal(result.taxRegion, null);
+});
 
 describe('tax', () => {
   it('applies the subdivision rate when one is mapped', () => {

@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-22-infinitepay-checkout",
+  "phase": "verified",
+  "scope": "Implement approved per-invoice hosted checkout, verified asynchronous payment confirmation, ownership-scoped API and OpenAPI contract in Laravel. Same merchant account as JBoot; no live financial API requests.",
+  "requirements": [
+    {
+      "id": "IP-001",
+      "text": "Trace existing JBoot configuration and support same InfinitePay merchant without shared callback/order collisions",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "docs/adr/0009-infinitepay-hosted-checkout.md:configuration source and activation",
+        "config/infinitepay.php",
+        "app/Services/Billing/CheckoutService.php:pb namespace and immutable merchant/callback snapshot"
+      ],
+      "delivered": "Shared merchant supported with separate namespace and callback; JBoot configuration traced",
+      "pending": "Secure merchant/key/public URL configuration and real activation",
+      "reason": "Actual account values are stored outside inspected source/templates; no production database access or live financial call performed"
+    },
+    {
+      "id": "IP-002",
+      "text": "Persist one stable checkout intent and integrate asynchronous collection alongside existing synchronous fake gateway",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Services/Billing/CheckoutService.php",
+        "app/Services/Billing/InfinitePayGateway.php",
+        "app/Services/Billing/BillingService.php:fake/hosted separation",
+        "tests/Feature/Services/Billing/InfinitePayCheckoutTest.php:intent, reuse, crash, timeout, rejection, expiry and config drift regressions"
+      ],
+      "delivered": "Native Laravel one-intent hosted checkout, preserved fake and immutable uncertain outcomes",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "IP-003",
+      "text": "Verify every payment server-to-server and settle with transaction uniqueness, correct amounts and idempotent audit/events",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Services/Billing/BillingService.php:confirmCheckout",
+        "database/migrations/2026_11_22_000001_create_payment_checkouts.php:unique transaction and invoice constraints",
+        "tests/Feature/Services/Billing/InfinitePayCheckoutTest.php:strict confirmation, amount/method checks, transaction replay, duplicate and inbox-crash recovery"
+      ],
+      "delivered": "Authoritative verification and idempotent atomic settlement",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "IP-004",
+      "text": "Persist webhook/return signals, queue verification and recover missed jobs through scheduler",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Services/Billing/CheckoutNotificationService.php",
+        "app/Jobs/Billing/VerifyCheckout.php",
+        "app/Console/Commands/VerifyPendingCheckoutsCommand.php",
+        "routes/console.php",
+        "tests/Feature/Services/Billing/InfinitePayCheckoutTest.php:durable sweep, backoff, exhausted signal retry"
+      ],
+      "delivered": "Durable inbox, bounded retries, scheduler recovery and authenticated reconciliation retry",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "IP-005",
+      "text": "Provide owned invoice list/detail, checkout and payment-check API routes with independent token scopes",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "routes/api.php",
+        "app/Enums/TokenAbility.php",
+        "app/Policies/InvoicePolicy.php",
+        "app/Http/Requests/Api/V1/PaymentSignalRequest.php",
+        "tests/Feature/Api/InvoiceEndpointsTest.php"
+      ],
+      "delivered": "Owned invoice endpoints, independent abilities, bounded public signals",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "IP-006",
+      "text": "Document OpenAPI and account activation/configuration; preserve earlier financial decision boundaries",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "docs/openapi.json:15 operations and 20 component schemas",
+        "tests/Feature/Api/OpenApiContractTest.php",
+        "README.md:InfinitePay checkout",
+        "docs/adr/0009-infinitepay-hosted-checkout.md",
+        "docs/STATUS.md"
+      ],
+      "delivered": "Complete API v1 OpenAPI contract, setup and operational boundaries",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "IP-007",
+      "text": "Execute regression, static, architecture and coverage checks plus independent review",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Full PHP PostgreSQL17/Redis7 suite:350 tests,851 assertions;coverage94.0%",
+        "PHPStan maximum level:no errors",
+        "Full Pint:188 files passed",
+        "Full Rector dry-run:passed",
+        "OpenAPI spec validator:passed",
+        "Production Docker build and isolated cached boot/migrations/15 API operations/bindings/scheduler:passed",
+        "Independent reviewer:/root/review_corrections"
+      ],
+      "delivered": "Regression, static, architecture, coverage, container and independent review gates passed",
+      "pending": null,
+      "reason": null
+    }
+  ],
+  "spec": {
+    "states": [
+      "checkout:creating,awaiting_payment,creation_unknown,creation_failed,paid,expired",
+      "notification:pending,confirmed,reconciliation"
+    ],
+    "inputs": [
+      "Issued BRL invoice",
+      "Unsigned webhook or authenticated return identifiers",
+      "Merchant settings from server environment"
+    ],
+    "outputs": [
+      "Durable checkout URL",
+      "Verified invoice settlement",
+      "Scoped invoice/status APIs and OpenAPI"
+    ],
+    "permissions": [
+      "Invoice read/write token abilities plus customer ownership",
+      "Public webhook accepts identifiers only; server-to-server confirmation is mandatory"
+    ],
+    "dataLifecycle": [
+      "One creation intent per invoice; stable namespace/order/expiry/payload before HTTP",
+      "Completion and charge audit update atomically",
+      "Persistent notification inbox plus scheduled recovery"
+    ],
+    "failures": [
+      "No automatic second create after ambiguous response",
+      "Provider errors leave invoices unpaid and never trigger card-decline dunning",
+      "Unknown orders acknowledged without cross-project effects",
+      "Underpayment, mismatched amount/currency or transaction reuse require reconciliation"
+    ],
+    "acceptanceCriteria": [
+      "Mocked HTTP regression tests cover creation, reuse, expiry/unknown outcomes, payment_check, forged/duplicate/replayed events and provider downtime",
+      "Existing fake gateway and renewal tests remain green",
+      "Full PHP/static/architecture/coverage gates pass",
+      "No live link creation or payment, no credentials in tracked files"
+    ],
+    "hasUi": false
+  },
+  "assumptions": [
+    "Confirmation means hosted link payments each cycle, not automatic card debits.",
+    "Initial invoice timing, upgrade invoice model and degraded invoice repricing remain unchanged.",
+    "A merchant API key is required to request single_payment and expiry options; legacy handle-only multi-use links are not issued.",
+    "The JBoot Go adapter is a contract/configuration reference; this implementation stays native Laravel."
+  ],
+  "verification": [
+    {
+      "check": "PHP Unit/Arch/Feature with PostgreSQL17 and Redis7",
+      "result": "passed",
+      "tests": 350,
+      "assertions": 851,
+      "coveragePercent": 94.0,
+      "requiredCoveragePercent": 80
+    },
+    {
+      "check": "PHPStan max, Pint188files and full Rector dry-run",
+      "result": "passed"
+    },
+    {
+      "check": "OpenAPI 3.1 structural validator and API route/scope contract regression",
+      "result": "passed",
+      "operations": 15
+    },
+    {
+      "check": "Production Docker build and isolated production cached config/routes/events, migrations, DI and scheduler",
+      "result": "passed"
+    },
+    {
+      "check": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "/root/review_corrections",
+      "role": "independent reviewer required by execution-integrity-gate",
+      "result": "approved; final ledger and completed gates independently checked",
+      "coverage": "IP-001 through IP-007",
+      "findings": [
+        "PriceQuote.tax_region must be nullable in the OpenAPI contract",
+        "Zero invoice checkout response must include checkout:null"
+      ],
+      "resolution": "Both corrected; zero-value endpoint regression passed; all15 API operations mapped to runtime route/scopes.",
+      "finalConfirmation": "No material inconsistencies; IP-001 through IP-007 covered; 15 operations and 20 component schemas confirmed. Activation configuration remains explicitly pending."
+    }
+  ],
+  "configurationEvidence": [
+    "JBoot adapter:implementations/svc-jboot-payments/internal/adapters/infinitepay/client.go",
+    "JBoot account handle comes from PostgreSQL provider_connections.public_identifier; optional secret_ref is a reference, not an embedded API key.",
+    "JBoot base URL and callback base come from PAYMENTS_INFINITEPAY_BASE_URL/PAYMENTS_PUBLIC_BASE_URL. No merchant handle found in checked environment templates.",
+    "Official checkout documentation:https://www.infinitepay.io/checkout-documentacao (verified2026-11-22)"
+  ],
+  "corrections": [
+    {
+      "cause": "API contract initially omitted degraded-preview nullability and zero-settlement eager-loading difference",
+      "fix": "Nullable tax_region schema and checkout relation loaded at the checkout HTTP boundary",
+      "prevention": "Independent resource-vs-contract review and zero-settlement endpoint regression",
+      "verification": "350 tests passed and OpenAPI structural validation passed"
+    },
+    {
+      "cause": "Laravel HTTP fake callbacks accumulate when repeatedly replaced in one test; EventFake forget deliberately does nothing",
+      "fix": "Fresh isolated HTTP factory per fake setup; mutable fault fixture switched off after simulated inbox write failure",
+      "prevention": "Typed HTTP fake request and explicit fault lifecycle in regression tests",
+      "verification": "Inbox-crash recovery regression and full suite passed"
+    }
+  ],
+  "activation": {
+    "status": "pending_secure_configuration",
+    "defaultGateway": "fake",
+    "required": [
+      "INFINITEPAY_HANDLE from the verified JBoot provider connection",
+      "INFINITEPAY_API_KEY permitting single_payment and valid_until",
+      "INFINITEPAY_WEBHOOK_URL for this project over public HTTPS"
+    ],
+    "optional": [
+      "INFINITEPAY_REDIRECT_URL"
+    ],
+    "liveFinancialRequests": 0,
+    "deployed": false,
+    "productionDatabaseAccess": false
+  },
+  "untouchedDecisions": [
+    "Initial invoice activation/due/failure policy",
+    "Plan-change adjustment invoice model and collection-failure outcome",
+    "Recovery/repricing policy for degraded invoices"
+  ],
+  "continuation": {
+    "implementationComplete": true,
+    "nextOperationalStep": "Supply settings securely, then validate deployment/real activation separately; do not recreate uncertain checkout intents or run live financial calls without scope.",
+    "futureWork": [
+      "Metrics",
+      "React dashboard using docs/openapi.json"
+    ],
+    "verificationServices": "Dedicated temporary containers/network removed after verification; no deployment."
+  }
+}

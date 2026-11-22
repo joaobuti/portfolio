@@ -26,6 +26,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $from_plan_id
  * @property int $to_plan_id
  * @property PlanChangeType $type
+ * @property string|null $payment_status
+ * @property int|null $previous_pending_plan_id
+ * @property CarbonImmutable|null $reverted_at
  * @property Money $proration_amount
  * @property int $days_in_period
  * @property int $days_remaining
@@ -43,6 +46,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'days_in_period',
     'days_remaining',
     'effective_at',
+    'payment_status',
+    'previous_pending_plan_id',
+    'reverted_at',
 ])]
 final class SubscriptionChange extends Model
 {
@@ -81,6 +87,7 @@ final class SubscriptionChange extends Model
     protected function casts(): array
     {
         return [
+            'reverted_at' => 'immutable_datetime',
             'type' => PlanChangeType::class,
             'proration_amount' => MoneyCast::class.':proration_amount_cents,currency',
             'days_in_period' => 'integer',

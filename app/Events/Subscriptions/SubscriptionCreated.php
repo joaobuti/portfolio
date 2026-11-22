@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Subscriptions;
 
+use App\DTOs\Subscriptions\RenewalPeriod;
 use App\Models\Subscription;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -16,10 +17,10 @@ use Illuminate\Queue\SerializesModels;
  * Billing and Notifications will listen; Subscriptions will never know they
  * exist.
  */
-final class SubscriptionCreated
+final readonly class SubscriptionCreated
 {
     use Dispatchable;
     use SerializesModels;
 
-    public function __construct(public readonly Subscription $subscription) {}
+    public function __construct(public Subscription $subscription, public ?RenewalPeriod $initialPeriod = null) {}
 }

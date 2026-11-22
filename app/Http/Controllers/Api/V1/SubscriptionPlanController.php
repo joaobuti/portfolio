@@ -27,8 +27,8 @@ final class SubscriptionPlanController extends Controller
     /**
      * What the change would cost, charging nothing.
      *
-     * Safe to call as often as the UI likes — it writes nothing and shares its
-     * arithmetic with `update()`, so the number shown is the number billed.
+     * Shares proration arithmetic with `update()`. Tax and coupons are quoted
+     * here; adjustment invoicing and collection are not connected yet.
      */
     public function preview(ChangePlanRequest $request, Subscription $subscription): PricedChangeResource
     {
@@ -37,6 +37,7 @@ final class SubscriptionPlanController extends Controller
                 $subscription,
                 $request->string('plan')->toString(),
                 $request->filled('coupon') ? $request->string('coupon')->toString() : null,
+                $request->boolean('apply_immediately'),
             ),
         );
     }
@@ -46,6 +47,8 @@ final class SubscriptionPlanController extends Controller
         $updated = $this->subscriptions->changePlan($subscription, new ChangePlanData(
             planCode: $request->string('plan')->toString(),
             applyDowngradeImmediately: $request->boolean('apply_immediately'),
+            quoteId: $request->filled('quote_id') ? $request->string('quote_id')->toString() : null,
+            couponCode: $request->filled('coupon') ? $request->string('coupon')->toString() : null,
         ));
 
         return SubscriptionResource::make(

@@ -9,7 +9,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Str;
 
 /**
  * Hands a failed payment to the Python risk worker.
@@ -18,10 +17,9 @@ use Illuminate\Support\Str;
  *
  * Everything below crosses a language boundary, so the shape is deliberate:
  *
- * - **`message_id`** is the idempotency key. The worker records it before
- *   acting, so a message redelivered after a crash is recognised and dropped.
- *   Generated here rather than by the transport because it must survive a
- *   republish of the same logical event.
+ * - **`message_id`** is the idempotency key. Derived from the persisted attempt
+ *   UUID, so a retry of this listener republishes the same logical identity.
+ *   The worker records completion atomically with result publication.
  * - **`correlation_id`** comes from Laravel's `Context`, which the HTTP
  *   middleware populated and which follows the work onto queued jobs
  *   automatically. It is why a customer action can be traced from the API,
@@ -59,7 +57,7 @@ final class PublishPaymentFailedForRisk implements ShouldQueue
         // published to a list the Python worker never reads. See
         // config/database.php.
         Redis::connection('messaging')->rpush($this->stream(), json_encode([
-            'message_id' => (string) Str::uuid(),
+            'message_id' => 'payment.failed:'.$event->attempt->uuid,
             'event' => 'payment.failed',
             'occurred_at' => $event->attempt->attempted_at->toIso8601String(),
             'correlation_id' => Context::get('correlation_id'),

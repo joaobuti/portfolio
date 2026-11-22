@@ -1,7 +1,7 @@
 # One command to a working system: `make up`.
 #
-# Four services, because the application genuinely has four moving parts. The
-# worker and the scheduler run as separate containers rather than as background
+# Seven services. The Laravel worker, Python worker and scheduler run as
+# separate containers rather than as background
 # processes inside the web container — that is how they run in production, and a
 # local setup that hides the distinction teaches the wrong mental model.
 
@@ -17,6 +17,12 @@ services:
       - "${APP_PORT:-8000}:8000"
     environment:
       CONTAINER_ROLE: app
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +42,8 @@ services:
     environment:
       CONTAINER_ROLE: worker
     depends_on:
+      app:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -55,6 +63,8 @@ services:
     environment:
       CONTAINER_ROLE: scheduler
     depends_on:
+      app:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:

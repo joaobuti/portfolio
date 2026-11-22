@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use App\Console\Commands\CollectDueInvoicesCommand;
 use App\Console\Commands\ConsumeRiskScoresCommand;
+use App\Console\Commands\ExpireAdjustmentInvoicesCommand;
 use App\Console\Commands\RenewDueSubscriptionsCommand;
+use App\Console\Commands\RepriceDegradedInvoicesCommand;
+use App\Console\Commands\VerifyPendingCheckoutsCommand;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -12,8 +15,9 @@ use Illuminate\Support\Facades\Schedule;
 | Scheduled work
 |--------------------------------------------------------------------------
 |
-| The renewal sweep runs at 03:00 UTC — outside Brazilian business hours, so
-| a slow run never competes with customer traffic.
+| Hourly renewal catches billing-day boundaries and resumes a period after
+| an unpaid upgrade has been reverted. Persisted dates and unique jobs guard
+| retries. Billing-day boundaries use America/Sao_Paulo in BillingCalendar.
 |
 | withoutOverlapping() guards against a sweep that outlives its window and
 | meets the next one. onOneServer() guards against every app node in the
@@ -27,22 +31,19 @@ use Illuminate\Support\Facades\Schedule;
 */
 
 Schedule::command(RenewDueSubscriptionsCommand::class)
-    ->dailyAt('03:00')
+    ->hourly()
     ->timezone('UTC')
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
 
 /*
-| The dunning sweep runs an hour after renewals, not alongside them. A renewal
-| issues an invoice whose first attempt is due immediately, and the listener
-| that issues it queues its own collection job — so by 04:00 today's invoices
-| have already been tried once and this sweep is picking up the retries, which
-| is what it is for. Running them together would double-queue every new
-| invoice and rely on the job's uniqueness to sort it out.
+| Collection runs every minute so initial immediate invoices, adjustment
+| invoices and recovered pricing reach the existing collector promptly.
+| Persisted next_attempt_at remains authoritative for retry timing.
 */
 Schedule::command(CollectDueInvoicesCommand::class)
-    ->dailyAt('04:00')
+    ->everyMinute()
     ->timezone('UTC')
     ->withoutOverlapping()
     ->onOneServer()
@@ -62,3 +63,12 @@ Schedule::command(ConsumeRiskScoresCommand::class)
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
+
+Schedule::command(VerifyPendingCheckoutsCommand::class)
+    ->everyMinute()->withoutOverlapping()->onOneServer()->runInBackground();
+
+Schedule::command(RepriceDegradedInvoicesCommand::class)
+    ->everyMinute()->withoutOverlapping()->onOneServer()->runInBackground();
+
+Schedule::command(ExpireAdjustmentInvoicesCommand::class)
+    ->everyMinute()->withoutOverlapping()->onOneServer()->runInBackground();

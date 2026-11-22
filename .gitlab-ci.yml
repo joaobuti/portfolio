@@ -14,6 +14,7 @@ stages:
 default:
   image: php:8.3-cli-alpine
   before_script:
+    - echo 'memory_limit=512M' > /usr/local/etc/php/conf.d/ci-memory.ini
     - apk add --no-cache git unzip icu-dev libzip-dev postgresql-dev linux-headers $PHPIZE_DEPS
     - docker-php-ext-install -j$(nproc) pdo_pgsql pcntl bcmath intl zip > /dev/null
     - pecl install redis > /dev/null && docker-php-ext-enable redis
@@ -62,6 +63,7 @@ rector:
 unit:
   stage: test
   script:
+    - sh tests/docker-entrypoint-check.sh
     - php artisan test --testsuite=Unit
 
 architecture:
@@ -74,12 +76,12 @@ architecture:
 # or the Redis lock — which are two of the three guardrails around double billing.
 feature:
   stage: test
-  services:
+  services: &billing-services
     - name: postgres:17-alpine
       alias: postgres
     - name: redis:7-alpine
       alias: redis
-  variables:
+  variables: &billing-test-env
     POSTGRES_DB: billing_test
     POSTGRES_USER: billing
     POSTGRES_PASSWORD: secret
@@ -99,9 +101,13 @@ feature:
 
 coverage:
   stage: test
+  services: *billing-services
+  variables: *billing-test-env
   script:
+    - cp .env.example .env
+    - php artisan key:generate
     - pecl install pcov > /dev/null && docker-php-ext-enable pcov
-    - php artisan test --coverage --min=80 --coverage-cobertura=coverage.xml
+    - php -d memory_limit=512M artisan test --coverage --min=80 --coverage-cobertura=coverage.xml
   coverage: '/^\s*Total:\s*(\d+\.\d+)\s*%/'
   artifacts:
     reports:

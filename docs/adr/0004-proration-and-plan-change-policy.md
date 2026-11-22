@@ -1,7 +1,16 @@
 # ADR-0004 — Upgrades bill now, downgrades wait
 
+**Amendment (2026-11-22):** [ADR-0011](0011-payment-activation-billing-day-and-adjustments.md)
+resolves the historical initial/adjustment/repricing gaps noted below and
+defines the approved payment calendar and rollback policy.
+
 - **Status:** accepted
 - **Date:** 2026-08
+
+**Implementation note (2026-11-21):** Immediate plan changes and proration
+records are implemented, but collection of their monetary adjustment is not
+connected. The preview is a quote, not a reserved final charge. See
+[current delivery status](../STATUS.md) for the remaining integration decisions.
 
 ## Context
 

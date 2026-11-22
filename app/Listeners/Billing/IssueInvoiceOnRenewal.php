@@ -43,16 +43,16 @@ final class IssueInvoiceOnRenewal implements ShouldQueue
 
     public function __invoke(SubscriptionRenewed $event): void
     {
-        $invoice = $this->billing->issueForPeriod($event->subscription);
+        $invoice = $this->billing->issueForPeriod($event->subscription, $event->period, $event->firstPayment);
 
         if (! $invoice->isChargeable()) {
-            // A degraded invoice waits for a human or for the pricing service
-            // to come back. Dispatching a collection job that is guaranteed to
-            // throw would just fill the failed jobs table.
+            // A degraded invoice requires explicit recovery; restoring pricing
+            // alone does not update it. Dispatching collection now would only
+            // fill the failed jobs table.
             return;
         }
 
-        CollectInvoice::dispatch($invoice->uuid);
+        CollectInvoice::dispatch($invoice->uuid)->delay($invoice->next_attempt_at);
     }
 
     public function viaQueue(): string

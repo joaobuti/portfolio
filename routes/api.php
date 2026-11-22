@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 use App\Enums\TokenAbility;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InfinitePayWebhookController;
+use App\Http\Controllers\Api\V1\InvoiceCheckoutController;
+use App\Http\Controllers\Api\V1\InvoiceController;
+use App\Http\Controllers\Api\V1\InvoicePaymentCheckController;
+use App\Http\Controllers\Api\V1\MetricsController;
 use App\Http\Controllers\Api\V1\PlanController;
 use App\Http\Controllers\Api\V1\SubscriptionController;
 use App\Http\Controllers\Api\V1\SubscriptionPlanController;
@@ -30,7 +35,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->as('api.v1.')->group(function (): void {
 
-    // The only unauthenticated route in the API: you cannot present a token
+    Route::post('webhooks/infinitepay', InfinitePayWebhookController::class)
+        ->middleware('throttle:infinitepay-webhooks')->name('webhooks.infinitepay');
+
+    // Token issuance is public: you cannot present a token
     // before you have one. Rate limited harder than everything else, because
     // it is the one endpoint where guessing is the attack.
     Route::post('auth/tokens', [AuthController::class, 'store'])
@@ -38,6 +46,16 @@ Route::prefix('v1')->as('api.v1.')->group(function (): void {
         ->name('auth.tokens.store');
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('metrics', MetricsController::class)
+            ->middleware(['abilities:'.TokenAbility::MetricsRead->value, 'throttle:api'])->name('metrics');
+        Route::middleware('abilities:'.TokenAbility::InvoicesRead->value)->group(function (): void {
+            Route::get('subscriptions/{subscription}/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+            Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        });
+        Route::middleware(['abilities:'.TokenAbility::InvoicesWrite->value, 'throttle:api'])->group(function (): void {
+            Route::post('invoices/{invoice}/checkout', [InvoiceCheckoutController::class, 'store'])->name('invoices.checkout');
+            Route::post('invoices/{invoice}/payment-check', [InvoicePaymentCheckController::class, 'store'])->name('invoices.payment-check');
+        });
         Route::get('auth/me', [AuthController::class, 'show'])->name('auth.me');
         Route::delete('auth/tokens/current', [AuthController::class, 'destroy'])
             ->name('auth.tokens.destroy');

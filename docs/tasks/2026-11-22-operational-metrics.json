@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-22-operational-metrics",
+  "phase": "verified",
+  "scope": "Continue the documented metrics backlog with read-only Laravel operational gauges. No financial product policy, live payment activation or dashboard changes.",
+  "requirements": [
+    {
+      "id": "MET-001",
+      "text": "Expose bounded operational gauges for invoices, subscriptions, checkout state and notification verification backlog",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Services/Observability/OperationalMetrics.php",
+        "tests/Feature/Api/MetricsEndpointTest.php:state, due, expiry, backlog and age regressions",
+        "Authenticated production response parsed as9gauge families and23series"
+      ],
+      "delivered": "Nine operational gauge families with bounded status labels and explicit zero series",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "MET-002",
+      "text": "Restrict global metrics to staff with a dedicated token ability; never expose account/customer/transaction identifiers",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Enums/TokenAbility.php:MetricsRead",
+        "routes/api.php:Sanctum and ability middleware",
+        "app/Http/Controllers/Api/V1/MetricsController.php:independent staff capability check before cache access",
+        "MetricsEndpointTest:customer denied with scope or wildcard, issuance ceiling and staff narrowing"
+      ],
+      "delivered": "Staff-only global monitoring with independent role and token scope restrictions",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "MET-003",
+      "text": "Cache aggregate snapshots briefly and report collection time; avoid model hydration or state mutations while scraping",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "OperationalMetrics:15second rendered scalar cache, snapshot timestamp and SQL aggregates",
+        "MetricsEndpointTest:no additional SQL on cached render, real array-store TTL expiry, read-only expiry and failed scrape behavior"
+      ],
+      "delivered": "Read-only aggregate snapshot,15second cache, clock-aware age and collection failures surfaced",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "MET-004",
+      "text": "Document the scrape contract, configuration and operational limits in OpenAPI and repository docs",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "docs/OPERATIONS.md",
+        "docs/adr/0010-operational-metrics.md",
+        "docs/openapi.json:16current operations and metrics scope",
+        "README.md",
+        "docs/STATUS.md"
+      ],
+      "delivered": "Scrape guide, OpenAPI contract and architecture decision",
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "MET-005",
+      "text": "Verify auth boundaries, expiry/due/backlog semantics, cache behavior and full regression/static gates; independent review",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Full PHP361tests/904assertions,94.1%coverage on PostgreSQL17/Redis7",
+        "PHPStan maximum level, Pint191files and full Rector dryrun passed",
+        "OpenAPI3.1 structural validator and runtime route/scope contract passed",
+        "Production Docker build, cached boot/routes/events/migrations and real staff bearer-token HTTP kernel request passed",
+        "Prometheus client parser accepted9families/23series with fixed labels and no duplicate series",
+        "Independent review:/root/review_corrections"
+      ],
+      "delivered": "Complete automated gates, production/parser validation and independent review",
+      "pending": null,
+      "reason": null
+    }
+  ],
+  "spec": {
+    "objective": "Authenticated Prometheus text endpoint for current billing operational state",
+    "actors": [
+      "staff monitoring token"
+    ],
+    "states": [
+      "fresh snapshot",
+      "cached snapshot",
+      "collection failure"
+    ],
+    "inputs": [
+      "Authenticated GET /api/v1/metrics"
+    ],
+    "outputs": [
+      "Prometheus text format0.0.4, fixed labels, allknown states includingzero"
+    ],
+    "permissions": [
+      "Sanctum + metrics:read + staff capability; role check independent of token ability"
+    ],
+    "dataLifecycle": [
+      "Read-only bounded SQL aggregates; cache scalar rendered snapshot for15seconds; expose snapshot timestamp"
+    ],
+    "failures": [
+      "Collection/cache errors fail the scrape, rather than return fabricated zeros or success",
+      "Authentication and authorization checked before snapshot/cache access"
+    ],
+    "acceptanceCriteria": [
+      "Customer denied even with manually granted metrics scope",
+      "Counts reconcile persisted state and effective expired checkout presentation",
+      "Pending backlog age uses fixed Clock and never becomes negative",
+      "No identifiers, amounts, URLs or secrets in labels; fixedbounded statuslabels",
+      "PHP architecture/static/test/coverage and Prometheus syntax parser pass"
+    ],
+    "hasUi": false
+  },
+  "assumptions": [
+    "The roadmap entry Metrics is continued as operational billing observability, using current persisted states; revenue, MRR and other accounting definitions remain outside scope.",
+    "Read-only staff monitoring follows existing staff capability; customers receive no metrics permission by default.",
+    "Snapshot queries are not an atomic financial report; scrape output is cached15seconds.",
+    "No Prometheus/Grafana service deployed; endpoint and example scrape configuration supplied."
+  ],
+  "verification": [
+    {
+      "check": "Full PHP Unit/Arch/Feature with PostgreSQL17 and Redis7",
+      "result": "passed",
+      "tests": 361,
+      "assertions": 904,
+      "coveragePercent": 94.1,
+      "coverageGatePercent": 80
+    },
+    {
+      "check": "PHPStan max",
+      "result": "passed"
+    },
+    {
+      "check": "Full Pint",
+      "result": "passed",
+      "files": 191
+    },
+    {
+      "check": "Full Rector dryrun",
+      "result": "passed"
+    },
+    {
+      "check": "OpenAPI3.1 validator and route/scope contract",
+      "result": "passed",
+      "operations": 16
+    },
+    {
+      "check": "Production Docker build, cached bootstrap/config/routes/events and migrations plus real bearer-token metrics request through HTTP kernel",
+      "result": "passed",
+      "environment": "isolated temporary database/network, no deployment or financial API requests"
+    },
+    {
+      "check": "Prometheus client text parser against actual authenticated production response",
+      "result": "passed",
+      "gaugeFamilies": 9,
+      "series": 23,
+      "properties": [
+        "bounded status labels",
+        "no duplicate series",
+        "nonnegative values",
+        "final newline"
+      ]
+    },
+    {
+      "check": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "/root/review_corrections",
+      "result": "approved; final ledger, complete gates and real response parser evidence independently checked",
+      "requirements": [
+        "MET-001",
+        "MET-002",
+        "MET-003",
+        "MET-004",
+        "MET-005"
+      ],
+      "findings": [],
+      "finalConfirmation": "No material inconsistencies across MET-001 through MET-005,16API operations,361tests,94.1%coverage and9gauge families/23series."
+    }
+  ],
+  "pendingExternal": [
+    "InfinitePay real account activation remains pending secure settings from the preceding task."
+  ],
+  "untouchedDecisions": [
+    "Initial invoice activation/due/failure policy",
+    "Adjustment invoicing and payment-failure policy",
+    "Degraded invoice recovery/repricing policy"
+  ],
+  "corrections": [
+    {
+      "cause": "Database aggregate values have driver-dependent integer/string types; unchecked mixed conversion failed maximum-level analysis",
+      "fix": "Validate aggregate counts as nonnegative integers or decimal strings before conversion; invalid values fail the scrape",
+      "prevention": "Strict aggregate boundary plus full PHPStan gate",
+      "verification": "PHPStan max and PostgreSQL feature regressions passed"
+    }
+  ],
+  "continuation": {
+    "implementationComplete": true,
+    "nextIndependentBacklog": "React dashboard and generated client, using docs/openapi.json",
+    "notChanged": [
+      "No InfinitePay credentials extracted or default gateway activation",
+      "No production deployment, external collector or alert messages",
+      "No initial/adjustment/degraded-invoice policy changes"
+    ],
+    "temporaryResources": "Dedicated verification containers/network removed after final checks"
+  }
+}

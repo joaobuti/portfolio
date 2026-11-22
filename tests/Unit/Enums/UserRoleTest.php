@@ -16,6 +16,8 @@ describe('customer scope', function (): void {
             TokenAbility::PlansRead,
             TokenAbility::SubscriptionsRead,
             TokenAbility::SubscriptionsWrite,
+            TokenAbility::InvoicesRead,
+            TokenAbility::InvoicesWrite,
         ]);
     });
 });

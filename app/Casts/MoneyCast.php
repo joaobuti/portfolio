@@ -19,13 +19,13 @@ use InvalidArgumentException;
  * the amount and rebuilding a Money on read means the invalid operation fails
  * loudly in PHP instead of quietly in a report.
  *
- * @implements CastsAttributes<Money, Money>
+ * @implements CastsAttributes<Money, mixed>
  */
-final class MoneyCast implements CastsAttributes
+final readonly class MoneyCast implements CastsAttributes
 {
     public function __construct(
-        private readonly string $amountColumn = 'amount_cents',
-        private readonly string $currencyColumn = 'currency',
+        private string $amountColumn = 'amount_cents',
+        private string $currencyColumn = 'currency',
     ) {}
 
     /**
@@ -40,7 +40,11 @@ final class MoneyCast implements CastsAttributes
             return null;
         }
 
-        return Money::ofMinor((int) $amount, Currency::from((string) $currency));
+        if ((! is_int($amount) && ! is_string($amount)) || ! is_string($currency)) {
+            throw new InvalidArgumentException('Stored money requires an integer or string amount and a string currency.');
+        }
+
+        return Money::ofMinor((int) $amount, Currency::from($currency));
     }
 
     /**

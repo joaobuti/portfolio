@@ -19,6 +19,8 @@ final class SubscriptionChangeResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'payment_status' => $this->payment_status,
+            'reverted_at' => $this->reverted_at?->toIso8601String(),
             'type' => [
                 'value' => $this->type->value,
                 'label' => $this->type->label(),

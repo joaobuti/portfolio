@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\MoneyCast;
+use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * What a customer owes for one billing event.
@@ -26,6 +28,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $uuid
  * @property int $customer_id
  * @property int|null $subscription_id
+ * @property InvoiceKind $kind
+ * @property int|null $subscription_change_id
+ * @property CarbonImmutable|null $payment_deadline_at
  * @property InvoiceStatus $status
  * @property Money $subtotal
  * @property Money $discount
@@ -39,9 +44,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $paid_at
  * @property CarbonImmutable|null $next_attempt_at
  * @property int $attempt_count
+ * @property int $pricing_recovery_attempts
+ * @property CarbonImmutable|null $pricing_retry_at
+ * @property CarbonImmutable|null $repriced_at
+ * @property string|null $pricing_region
+ * @property string|null $coupon_code
  * @property-read Customer $customer
  * @property-read Subscription|null $subscription
  * @property-read \Illuminate\Database\Eloquent\Collection<int, ChargeAttempt> $attempts
+ * @property-read PaymentCheckout|null $checkout
  */
 #[Fillable([
     'customer_id',
@@ -58,6 +69,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'paid_at',
     'attempt_count',
     'next_attempt_at',
+    'pricing_recovery_attempts',
+    'pricing_retry_at',
+    'repriced_at',
+    'pricing_region',
+    'coupon_code',
+    'kind',
+    'subscription_change_id',
+    'payment_deadline_at',
 ])]
 #[RouteKey('uuid')]
 final class Invoice extends Model
@@ -97,6 +116,12 @@ final class Invoice extends Model
     public function attempts(): HasMany
     {
         return $this->hasMany(ChargeAttempt::class)->latest('attempted_at');
+    }
+
+    /** @return HasOne<PaymentCheckout, $this> */
+    public function checkout(): HasOne
+    {
+        return $this->hasOne(PaymentCheckout::class);
     }
 
     /**
@@ -145,6 +170,8 @@ final class Invoice extends Model
     {
         return [
             'status' => InvoiceStatus::class,
+            'kind' => InvoiceKind::class,
+            'payment_deadline_at' => 'immutable_datetime',
             'subtotal' => MoneyCast::class.':subtotal_cents,currency',
             'discount' => MoneyCast::class.':discount_cents,currency',
             'tax' => MoneyCast::class.':tax_cents,currency',
@@ -156,6 +183,9 @@ final class Invoice extends Model
             'paid_at' => 'immutable_datetime',
             'next_attempt_at' => 'immutable_datetime',
             'attempt_count' => 'integer',
+            'pricing_recovery_attempts' => 'integer',
+            'pricing_retry_at' => 'immutable_datetime',
+            'repriced_at' => 'immutable_datetime',
         ];
     }
 

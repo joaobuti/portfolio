@@ -13,9 +13,7 @@ use Illuminate\Database\Seeder;
 /**
  * The plan catalogue.
  *
- * `updateOrCreate` keyed on the plan code so the seeder is idempotent: it can
- * be re-run against an existing database to pick up a price change without
- * orphaning the subscriptions that point at these rows.
+ * Create missing demo plans without overwriting catalogue edits on restart.
  */
 final class PlanSeeder extends Seeder
 {
@@ -69,7 +67,7 @@ final class PlanSeeder extends Seeder
         ];
 
         foreach ($plans as $attributes) {
-            Plan::query()->updateOrCreate(['code' => $attributes['code']], $attributes);
+            Plan::query()->firstOrCreate(['code' => $attributes['code']], $attributes);
         }
     }
 }

@@ -94,6 +94,37 @@ describe('the happy path', function (): void {
 });
 
 describe('degrading', function (): void {
+    it('degrades when malformed response arithmetic overflows', function (): void {
+        Http::fake(['*' => Http::response(pricingResponse([
+            'subtotalMinorUnits' => PHP_INT_MAX,
+            'discountMinorUnits' => 0,
+            'taxableMinorUnits' => PHP_INT_MAX,
+            'taxMinorUnits' => 1,
+            'totalMinorUnits' => PHP_INT_MAX,
+        ]))]);
+        expect($this->client->quote(Money::ofMinor(PHP_INT_MAX, Currency::BRL), 'BR')->isDegraded())->toBeTrue();
+    });
+
+    it('rejects a reconciled quote for a different subtotal', function (): void {
+        Http::fake(['*' => Http::response(pricingResponse([
+            'subtotalMinorUnits' => 1, 'discountMinorUnits' => 0,
+            'taxableMinorUnits' => 1, 'taxMinorUnits' => 0, 'totalMinorUnits' => 1,
+        ]))]);
+        expect($this->client->quote(Money::ofMinor(10_000, Currency::BRL), 'BR')->isDegraded())->toBeTrue();
+    });
+
+    it('rejects an inconsistent taxable amount', function (): void {
+        Http::fake(['*' => Http::response(pricingResponse(['taxableMinorUnits' => 1]))]);
+        expect($this->client->quote(Money::ofMinor(10_000, Currency::BRL), 'BR')->isDegraded())->toBeTrue();
+    });
+
+    it('does not retry an HTTP error even when connection retries are enabled', function (int $status): void {
+        config()->set('pricing.retries', 2);
+        Http::fake(['*' => Http::response([], $status)]);
+        expect($this->client->quote(Money::ofMinor(10_000, Currency::BRL), 'BR')->isDegraded())->toBeTrue();
+        Http::assertSentCount(1);
+    })->with([422, 503]);
+
     it('degrades on a connection failure', function (): void {
         Http::fake(fn () => throw new Illuminate\Http\Client\ConnectionException('timed out'));
 

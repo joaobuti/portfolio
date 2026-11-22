@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-21-comprehensive-corrections",
+  "phase": "complete",
+  "scope": "Complete technical audit and corrections across current PHP, Node, Python, Docker and CI implementation. Preserve established commercial rules and the three previously documented financial decisions; no deployment or publishing.",
+  "requirements": [
+    {
+      "id": "ALL-001",
+      "text": "Restore complete repository Rector gate and remove redundant configuration",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "15 files proposed by full Rector dry-run",
+        "rector.php",
+        "app/Events",
+        "tests/Arch.php",
+        "tests/standalone-domain-check.php"
+      ]
+    },
+    {
+      "id": "ALL-002",
+      "text": "Validate pricing response identity/arithmetic and connection-only retries; safe Node totals and lookups",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Audit: reconciled quote for wrong subtotal accepted; retry predicate absent; prototype-key lookup and total overflow",
+        "app/Services/Pricing/HttpPricingClient.php",
+        "tests/Feature/Services/Pricing/HttpPricingClientTest.php",
+        "services/pricing/src"
+      ]
+    },
+    {
+      "id": "ALL-003",
+      "text": "Durable risk-worker processing: atomic completed marker/publication, crash recovery and transient retry safety",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Audit: pre-score seen marker prevents recovery after crash or publish failure",
+        "services/risk-worker/src/risk_worker/consumer.py",
+        "services/risk-worker/tests/test_consumer.py"
+      ]
+    },
+    {
+      "id": "ALL-004",
+      "text": "Stable risk event identity and durable PHP return leg; reject malformed envelope types",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Audit: fresh message UUID per republish; LPOP before database save",
+        "app/Console/Commands/ConsumeRiskScoresCommand.php",
+        "app/Listeners/Billing/PublishPaymentFailedForRisk.php",
+        "tests/Feature/Risk/RiskIntegrationTest.php"
+      ]
+    },
+    {
+      "id": "ALL-005",
+      "text": "Production build/startup correctness, environment injection, dependency isolation and repeatable local boot",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Audit: build-time config cache; host vendor/.env copied; non-root env writes; non-idempotent demo seeding",
+        "docker/Dockerfile",
+        "docker/entrypoint.sh",
+        "docker-compose.yml",
+        ".dockerignore",
+        "tests/Feature/Regression/BootstrapTest.php",
+        "tests/docker-entrypoint-check.sh",
+        "Development Docker build reproduced missing autoconf after base stage removed compiler tools; development target now installs temporary Xdebug build dependencies"
+      ]
+    },
+    {
+      "id": "ALL-006",
+      "text": "Make CI feature/coverage services and all service checks executable; verify declared coverage target honestly",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Coverage job lacks Redis required by risk tests; full checks previously unexecuted",
+        ".gitlab-ci.yml",
+        "/tmp/portfolio-coverage-updated-deps.log"
+      ]
+    },
+    {
+      "id": "ALL-007",
+      "text": "Persist gateway attempt, invoice outcome and subscription status in one transaction; enforce persisted attempt date",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Independent audit of existing documented invariants",
+        "app/Services/Billing/BillingService.php",
+        "tests/Feature/Regression/TechnicalIntegrityTest.php"
+      ]
+    },
+    {
+      "id": "ALL-008",
+      "text": "Capture renewal period and price immutably across queued event serialization",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Independent audit of existing documented invariants",
+        "app/DTOs/Subscriptions/RenewalPeriod.php",
+        "app/Events/Subscriptions/SubscriptionRenewed.php",
+        "tests/Feature/Regression/TechnicalIntegrityTest.php"
+      ]
+    },
+    {
+      "id": "ALL-009",
+      "text": "Revalidate plan changes under lock and align scheduled downgrade preview with existing policy",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Independent audit of existing documented invariants",
+        "app/Services/Subscriptions/SubscriptionService.php",
+        "tests/Feature/Regression/TechnicalIntegrityTest.php"
+      ]
+    },
+    {
+      "id": "ALL-010",
+      "text": "Update vulnerable locked Composer dependencies within existing compatible constraints; audit and test updated installation",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "composer audit --locked:12 advisories affecting6 packages",
+        "Isolated constrained Composer update resolves without advisories",
+        "composer.lock",
+        "/tmp/portfolio-dependency-update.log"
+      ]
+    },
+    {
+      "id": "DEC-001",
+      "text": "Initial invoice activation/payment policy",
+      "disposition": "human decision",
+      "status": "pending",
+      "reason": "Existing explicit constraint; not redefined by request to continue technical corrections.",
+      "evidence": [
+        "docs/STATUS.md"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "text": "Plan-change adjustment invoice model and payment failure outcome",
+      "disposition": "human decision",
+      "status": "pending",
+      "reason": "Existing explicit constraint; not redefined by request to continue technical corrections.",
+      "evidence": [
+        "docs/STATUS.md"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "text": "Degraded invoice recovery pricing date/mode",
+      "disposition": "human decision",
+      "status": "pending",
+      "reason": "Existing explicit constraint; not redefined by request to continue technical corrections.",
+      "evidence": [
+        "docs/STATUS.md"
+      ]
+    }
+  ],
+  "spec": {
+    "acceptanceCriteria": [
+      "Reproduce actionable failures with meaningful regression checks",
+      "Run whole PHP gates and both service toolchains",
+      "Build production images and smoke-test runtime environment handling",
+      "Retain scoped token permissions, integer money, idempotency, retry policy and pending financial decisions"
+    ],
+    "hasUi": false
+  },
+  "verification": [
+    "Full PHP suite, PHP8.3/PostgreSQL17/Redis7:304passed,628assertions",
+    "PHP coverage:93.6%; existing80% gate passed",
+    "PHPStan maximum level:passed, no new suppressions or baseline",
+    "Full Pint:passed; full Rector dry-run:passed",
+    "Standalone domain checks:43passed,0failed",
+    "Node22 pricing:37tests passed; TypeScript strict check passed; npm audit0vulnerabilities",
+    "Python3.12 risk:64tests passed against realRedis; strictmypy andruff passed",
+    "Composer locked audit:no security vulnerability advisories found (before update12advisories/6packages)",
+    "All PHP/Node/Python development and production Docker targets built successfully",
+    "Production PHP HTTP health and runtime injected DB_HOST/APP_KEY passed; image excludes.env/.git/tests/Faker",
+    "Real production-image roundtrip:PHP->Nodepricing->fakegatewayfailure->Python->Redis->PHPsave risk45/medium,processinglist empty",
+    "Missing production key fails before dependency wait; startup fixture .env and injected-key/config-cache checks passed",
+    "Shell syntax,Composeconfig,CIYAML service/variable anchors,local documentation links and git diff --check passed"
+  ],
+  "reviews": [
+    {
+      "reviewer": "review_corrections",
+      "status": "approved",
+      "scope": "Independent mapping of ALL-001 through ALL-010 against changed code, regressions and final evidence; final DTO namespace and Xdebug fixes reviewed",
+      "checks": [
+        "git diff --check",
+        "shell syntax",
+        "Compose config"
+      ],
+      "limitations": "Reviewer did not independently rerun all executor toolchains; their results are recorded above."
+    }
+  ],
+  "corrections": [
+    {
+      "cause": "Rector simplified a by-reference test closure as a constant, removing its one-time fault condition",
+      "fix": "Use an explicit failing event listener and remove that listener before retrying",
+      "prevention": "Full regression suite runs after Rector changes; independent semantic review",
+      "verification": "Regression test caught unintended transformation before completion"
+    },
+    {
+      "requirementId": "ALL-004",
+      "cause": "Attempt to satisfy a Redis static signature used raw command() and bypassed Laravel PhpRedis argument adaptation",
+      "fix": "Use the concrete PhpRedisConnection wrapper lrem(key,count,value)",
+      "prevention": "Real PhpRedis integration regressions plus independent semantic review",
+      "verification": "16 Postgres/PhpRedis integration tests passed; PHPStan passed; production Python-to-PHP ACK roundtrip passed"
+    }
+  ],
+  "report": {
+    "status": "completed_authorized_technical_scope",
+    "rows": [
+      {
+        "requirementId": "ALL-001",
+        "requested": "Restore complete repository Rector gate and remove redundant configuration",
+        "delivered": "Full Rector dry-run passes; redundant rule removed; typed immutable events retained; Eloquent callback signature exception scoped to its observer.",
+        "evidence": [
+          "15 files proposed by full Rector dry-run",
+          "rector.php",
+          "app/Events",
+          "tests/Arch.php",
+          "tests/standalone-domain-check.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-002",
+        "requested": "Validate pricing response identity/arithmetic and connection-only retries; safe Node totals and lookups",
+        "delivered": "Response subtotal/taxable reconciliation, dependency-overflow fallback, connection-only retries, safe Node total and structured413 response implemented.",
+        "evidence": [
+          "Audit: reconciled quote for wrong subtotal accepted; retry predicate absent; prototype-key lookup and total overflow",
+          "app/Services/Pricing/HttpPricingClient.php",
+          "tests/Feature/Services/Pricing/HttpPricingClientTest.php",
+          "services/pricing/src"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-003",
+        "requested": "Durable risk-worker processing: atomic completed marker/publication, crash recovery and transient retry safety",
+        "delivered": "Pure scoring followed by atomic score+completed marker+ACK; atomic retry/dead-letter movement; raw-byte parsing and base64 preservation; strict boolean/config handling.",
+        "evidence": [
+          "Audit: pre-score seen marker prevents recovery after crash or publish failure",
+          "services/risk-worker/src/risk_worker/consumer.py",
+          "services/risk-worker/tests/test_consumer.py"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-004",
+        "requested": "Stable risk event identity and durable PHP return leg; reject malformed envelope types",
+        "delivered": "Stable attempt-derived event IDs; shared-lock score claiming and ACK after persistence; failed write recovery and UUID validation.",
+        "evidence": [
+          "Audit: fresh message UUID per republish; LPOP before database save",
+          "app/Console/Commands/ConsumeRiskScoresCommand.php",
+          "app/Listeners/Billing/PublishPaymentFailedForRisk.php",
+          "tests/Feature/Risk/RiskIntegrationTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-005",
+        "requested": "Production build/startup correctness, environment injection, dependency isolation and repeatable local boot",
+        "delivered": "Runtime environment/key caching, no production demo generation, idempotent local seeds, host-artifact exclusion, API readiness dependency and complete Xdebug build prerequisites.",
+        "evidence": [
+          "Audit: build-time config cache; host vendor/.env copied; non-root env writes; non-idempotent demo seeding",
+          "docker/Dockerfile",
+          "docker/entrypoint.sh",
+          "docker-compose.yml",
+          ".dockerignore",
+          "tests/Feature/Regression/BootstrapTest.php",
+          "tests/docker-entrypoint-check.sh",
+          "Development Docker build reproduced missing autoconf after base stage removed compiler tools; development target now installs temporary Xdebug build dependencies"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-006",
+        "requested": "Make CI feature/coverage services and all service checks executable; verify declared coverage target honestly",
+        "delivered": "Coverage job now has Postgres/Redis/bootstrap matching feature checks; full declared PHP/service gates pass, coverage target unchanged.",
+        "evidence": [
+          "Coverage job lacks Redis required by risk tests; full checks previously unexecuted",
+          ".gitlab-ci.yml",
+          "/tmp/portfolio-coverage-updated-deps.log"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-007",
+        "requested": "Persist gateway attempt, invoice outcome and subscription status in one transaction; enforce persisted attempt date",
+        "delivered": "Gateway attempt and resulting invoice/subscription state use one outer transaction; persisted due/retry times enforced.",
+        "evidence": [
+          "Independent audit of existing documented invariants",
+          "app/Services/Billing/BillingService.php",
+          "tests/Feature/Regression/TechnicalIntegrityTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-008",
+        "requested": "Capture renewal period and price immutably across queued event serialization",
+        "delivered": "Subscriptions RenewalPeriod DTO snapshots boundaries and price in serializable event; billing uses captured inputs.",
+        "evidence": [
+          "Independent audit of existing documented invariants",
+          "app/DTOs/Subscriptions/RenewalPeriod.php",
+          "app/Events/Subscriptions/SubscriptionRenewed.php",
+          "tests/Feature/Regression/TechnicalIntegrityTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-009",
+        "requested": "Revalidate plan changes under lock and align scheduled downgrade preview with existing policy",
+        "delivered": "Plan/state validation runs under mutation lock; scheduled versus immediate downgrade previews use the existing policy.",
+        "evidence": [
+          "Independent audit of existing documented invariants",
+          "app/Services/Subscriptions/SubscriptionService.php",
+          "tests/Feature/Regression/TechnicalIntegrityTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "ALL-010",
+        "requested": "Update vulnerable locked Composer dependencies within existing compatible constraints; audit and test updated installation",
+        "delivered": "Compatible Composer update installed and verified; Laravel13.43 and patched transitive dependencies resolve12advisories without relaxing constraints.",
+        "evidence": [
+          "composer audit --locked:12 advisories affecting6 packages",
+          "Isolated constrained Composer update resolves without advisories",
+          "composer.lock",
+          "/tmp/portfolio-dependency-update.log"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "DEC-001",
+        "requested": "Initial invoice activation/payment policy",
+        "delivered": "Current limitation and required decisions documented in docs/STATUS.md",
+        "evidence": [
+          "docs/STATUS.md"
+        ],
+        "pending": "Initial invoice activation/payment policy",
+        "reason": "Existing explicit constraint; not redefined by request to continue technical corrections."
+      },
+      {
+        "requirementId": "DEC-002",
+        "requested": "Plan-change adjustment invoice model and payment failure outcome",
+        "delivered": "Current limitation and required decisions documented in docs/STATUS.md",
+        "evidence": [
+          "docs/STATUS.md"
+        ],
+        "pending": "Plan-change adjustment invoice model and payment failure outcome",
+        "reason": "Existing explicit constraint; not redefined by request to continue technical corrections."
+      },
+      {
+        "requirementId": "DEC-003",
+        "requested": "Degraded invoice recovery pricing date/mode",
+        "delivered": "Current limitation and required decisions documented in docs/STATUS.md",
+        "evidence": [
+          "docs/STATUS.md"
+        ],
+        "pending": "Degraded invoice recovery pricing date/mode",
+        "reason": "Existing explicit constraint; not redefined by request to continue technical corrections."
+      }
+    ],
+    "limitations": [
+      "DEC-001–003 remain unresolved financial policy decisions.",
+      "OpenAPI,metrics,dashboard and real gateway are not implemented by this correction task.",
+      "Remote CI and deployment were not executed."
+    ],
+    "testInfrastructure": "Dedicated ephemeral Docker network/data services; no public ports, no persistent volumes and no real gateway."
+  }
+}

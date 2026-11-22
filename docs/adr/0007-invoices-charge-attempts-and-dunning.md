@@ -1,7 +1,21 @@
 # ADR-0007: Invoices, charge attempts, and a dunning policy the enum owns
 
+**Amendment (2026-11-22):** [ADR-0011](0011-payment-activation-billing-day-and-adjustments.md)
+resolves the historical initial/adjustment/repricing gaps noted below and
+defines the approved payment calendar and rollback policy.
+
 **Status** Accepted
 **Date** 2026-09-01
+
+**Amendment (2026-11-22):** [ADR-0009](0009-infinitepay-hosted-checkout.md)
+adds the approved InfinitePay hosted adapter. The synchronous fake contract and
+its dunning remain; asynchronous links are not card declines.
+
+**Implementation note (2026-11-21):** The implemented flow connects invoicing
+to renewals. Initial invoicing without a trial, plan-change adjustment
+collection and recovery of degraded invoices remain incomplete. The decisions
+below describe the intended design; see [current delivery status](../STATUS.md)
+for the implementation gaps.
 
 ## Context
 
@@ -151,5 +165,5 @@ swapping gateways is not a change in two repositories.
 - **Refunds and credit notes.** A reversal is not a negative invoice, and
   guessing at the model before there is a requirement would be inventing one.
 - **Partial payments.** Every invoice here is paid in full or not at all.
-- **A real gateway adapter.** The interface exists and the fake implements it;
-  the adapter is a day's work and an account nobody has yet.
+- **Other real gateway adapters.** InfinitePay hosted checkout is covered by
+  ADR-0009; additional providers are outside the current scope.

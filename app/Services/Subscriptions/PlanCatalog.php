@@ -22,21 +22,28 @@ use Illuminate\Support\Facades\Cache;
  */
 final readonly class PlanCatalog
 {
-    public const CACHE_KEY = 'plans:active';
+    // Version the key because older entries contain serialized PHP objects.
+    public const string CACHE_KEY = 'plans:active:v2';
 
-    private const CACHE_TTL_SECONDS = 3600;
+    private const int CACHE_TTL_SECONDS = 3600;
 
     /**
      * @return Collection<int, Plan>
      */
     public function active(): Collection
     {
-        /** @var Collection<int, Plan> */
-        return Cache::remember(
+        /** @var list<array<string, mixed>> $attributes */
+        $attributes = Cache::remember(
             self::CACHE_KEY,
             self::CACHE_TTL_SECONDS,
-            static fn (): Collection => Plan::query()->active()->ordered()->get(),
+            static fn (): array => Plan::query()->active()->ordered()->get()
+                ->map(static fn (Plan $plan): array => $plan->getAttributes())
+                ->all(),
         );
+
+        // Cache allows no PHP classes to be unserialized. Hydrate scalar rows
+        // here so money/enums keep their model casts without a database read.
+        return Plan::hydrate($attributes);
     }
 
     public function findByCode(string $code): ?Plan

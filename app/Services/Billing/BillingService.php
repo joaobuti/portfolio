@@ -5,20 +5,31 @@ declare(strict_types=1);
 namespace App\Services\Billing;
 
 use App\DTOs\Billing\ChargeResult;
+use App\DTOs\Billing\VerifiedPayment;
+use App\DTOs\Subscriptions\RenewalPeriod;
+use App\Enums\CheckoutStatus;
+use App\Enums\Currency;
+use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Enums\SubscriptionStatus;
 use App\Events\Billing\InvoiceIssued;
 use App\Events\Billing\InvoicePaid;
 use App\Events\Billing\InvoiceUncollectible;
 use App\Events\Billing\PaymentFailed;
+use App\Events\Subscriptions\SubscriptionPlanChanged;
+use App\Exceptions\Billing\CheckoutException;
 use App\Exceptions\Billing\InvoiceNotChargeableException;
 use App\Models\ChargeAttempt;
 use App\Models\Invoice;
+use App\Models\PaymentCheckout;
 use App\Models\Subscription;
+use App\Models\SubscriptionChange;
 use App\Services\Pricing\PricingClient;
+use App\Services\Subscriptions\BillingCalendar;
 use App\Services\Subscriptions\SubscriptionService;
 use App\Support\Clock;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
@@ -55,10 +66,12 @@ final readonly class BillingService
     private const int LOCK_WAIT = 10;
 
     public function __construct(
-        private PaymentGateway $gateway,
+        private PaymentGateway|CheckoutGateway $gateway,
         private PricingClient $pricing,
         private SubscriptionService $subscriptions,
         private Clock $clock,
+        private CheckoutService $checkouts,
+        private BillingCalendar $calendar,
     ) {}
 
     /**
@@ -69,17 +82,21 @@ final readonly class BillingService
      * throwing. That is what makes it safe to call from a queue job that may
      * be retried.
      */
-    public function issueForPeriod(Subscription $subscription): Invoice
+    public function issueForPeriod(Subscription $subscription, ?RenewalPeriod $period = null, bool $initial = false): Invoice
     {
-        $existing = $this->findInvoiceForPeriod($subscription);
+        $period ??= new RenewalPeriod(
+            $subscription->current_period_start->toDateTimeImmutable(),
+            $subscription->current_period_end->toDateTimeImmutable(),
+            $subscription->plan->amount,
+        );
+        $existing = $this->findInvoiceForPeriod($subscription, $period);
 
         if ($existing instanceof Invoice) {
             return $existing;
         }
 
-        $plan = $subscription->plan;
         $quote = $this->pricing->quote(
-            amount: $plan->amount,
+            amount: $period->amount,
             region: $this->defaultRegion(),
         );
 
@@ -88,14 +105,16 @@ final readonly class BillingService
                 'customer_id' => $subscription->customer_id,
                 'subscription_id' => $subscription->id,
                 'status' => InvoiceStatus::Open,
+                'kind' => $initial ? InvoiceKind::Initial : InvoiceKind::Renewal,
                 'subtotal' => $quote->subtotal,
                 'discount' => $quote->discount,
                 'tax' => $quote->tax,
                 'total' => $quote->total,
                 'pricing_degraded' => $quote->isDegraded(),
-                'period_start' => $subscription->current_period_start,
-                'period_end' => $subscription->current_period_end,
-                'due_at' => $dueAt = $this->clock->now()->addDays($this->dueInDays()),
+                'pricing_region' => $this->defaultRegion(),
+                'period_start' => $period->start,
+                'period_end' => $period->end,
+                'due_at' => $dueAt = $initial ? $this->clock->now() : $this->calendar->dueAt(CarbonImmutable::instance($period->start)),
                 'attempt_count' => 0,
                 // First attempt is simply "when it falls due".
                 'next_attempt_at' => $dueAt,
@@ -104,7 +123,7 @@ final readonly class BillingService
             // Another worker issued it between our check and our insert. The
             // desired end state is "an invoice exists for this period", and it
             // does — so this is a success, not a failure.
-            return $this->findInvoiceForPeriod($subscription)
+            return $this->findInvoiceForPeriod($subscription, $period)
                 ?? throw new RuntimeException('Invoice vanished after a unique violation.');
         }
 
@@ -130,10 +149,22 @@ final readonly class BillingService
             // duplicate charge.
             $invoice->refresh();
 
+            if ($this->adjustmentDeadlinePassed($invoice)) {
+                return $this->expireAdjustmentLocked($invoice);
+            }
+
             $this->assertChargeable($invoice);
 
             if ($invoice->isZeroValue()) {
-                return $this->settleWithoutCharging($invoice);
+                return DB::transaction(fn (): Invoice => $this->settle($invoice));
+            }
+
+            if ($this->gateway instanceof CheckoutGateway) {
+                return $this->checkouts->start($invoice, $this->gateway);
+            }
+
+            if ($invoice->checkout()->exists()) {
+                throw new CheckoutException('This invoice is already assigned to hosted checkout.');
             }
 
             $result = $this->gateway->charge(
@@ -146,12 +177,162 @@ final readonly class BillingService
                 idempotencyKey: "invoice:{$invoice->uuid}:attempt:{$invoice->attempt_count}",
             );
 
-            $attempt = $this->recordAttempt($invoice, $result);
+            return DB::transaction(function () use ($invoice, $result): Invoice {
+                $attempt = $this->recordAttempt($invoice, $result);
 
-            return $result->succeeded
-                ? $this->markPaid($invoice, $attempt)
-                : $this->handleFailure($invoice, $attempt, $result);
+                return $result->succeeded
+                    ? $this->markPaid($invoice, $attempt)
+                    : $this->handleFailure($invoice, $attempt, $result);
+            });
         });
+    }
+
+    public function checkout(Invoice $invoice): Invoice
+    {
+        if (! $this->gateway instanceof CheckoutGateway) {
+            throw new CheckoutException('Hosted checkout is not enabled.');
+        }
+        if ($invoice->status === InvoiceStatus::Paid && $invoice->checkout()->exists()) {
+            return $invoice->load('checkout');
+        }
+
+        return $this->collect($invoice);
+    }
+
+    public function repriceDegraded(Invoice $invoice): bool
+    {
+        return $this->withLock($invoice, function () use ($invoice): bool {
+            $invoice->refresh();
+            if ($invoice->status !== InvoiceStatus::Open || ! $invoice->pricing_degraded
+                || ($invoice->pricing_retry_at !== null && $invoice->pricing_retry_at > $this->clock->now())
+                || $invoice->checkout()->exists() || $invoice->attempts()->exists()) {
+                return false;
+            }
+            if ($this->adjustmentDeadlinePassed($invoice)) {
+                $this->expireAdjustmentLocked($invoice);
+
+                return false;
+            }
+            $quote = $this->pricing->quote($invoice->subtotal,
+                $invoice->pricing_region ?? $this->defaultRegion(), $invoice->coupon_code);
+            $attempts = $invoice->pricing_recovery_attempts + 1;
+            if ($quote->isDegraded() || ! $quote->subtotal->equals($invoice->subtotal) || ! $quote->reconciles()) {
+                $invoice->update(['pricing_recovery_attempts' => $attempts,
+                    'pricing_retry_at' => $this->clock->now()->addSeconds(min(3600, 60 * (2 ** min(6, $attempts - 1))))]);
+
+                return false;
+            }
+            DB::transaction(function () use ($invoice, $quote, $attempts): void {
+                $invoice->update(['discount' => $quote->discount, 'tax' => $quote->tax, 'total' => $quote->total,
+                    'pricing_degraded' => false, 'pricing_recovery_attempts' => $attempts,
+                    'pricing_retry_at' => null, 'repriced_at' => $this->clock->now(),
+                    'next_attempt_at' => $invoice->due_at->max($this->clock->now())]);
+            });
+
+            return true;
+        });
+    }
+
+    public function confirmCheckout(PaymentCheckout $checkout, VerifiedPayment $payment): bool
+    {
+        $invoice = Invoice::query()->findOrFail($checkout->invoice_id);
+        try {
+            return $this->withLock($invoice, fn (): bool => DB::transaction(function () use ($invoice, $checkout, $payment): bool {
+                $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+                $checkout = PaymentCheckout::query()->lockForUpdate()->findOrFail($checkout->id);
+                if ($this->adjustmentDeadlinePassed($invoice)) {
+                    $this->expireAdjustmentLocked($invoice);
+
+                    return false;
+                }
+                if ($payment->reference->orderReference !== $checkout->order_reference
+                    || $payment->reference->merchantHandle !== $checkout->merchant_handle
+                    || $invoice->total->currency !== Currency::BRL || $checkout->currency !== Currency::BRL->value
+                    || $payment->amount !== $checkout->amount_cents || $payment->amount !== $invoice->total->minorUnits
+                    || $payment->paidAmount < $payment->amount || $payment->installments < 1 || $payment->installments > 12
+                    || ! in_array($payment->captureMethod, ['pix', 'credit_card'], true)
+                    || ($payment->captureMethod === 'pix' && $payment->installments !== 1)
+                    || $invoice->pricing_degraded) {
+                    return false;
+                }
+                if ($invoice->status === InvoiceStatus::Paid) {
+                    return $checkout->transaction_nsu === $payment->reference->transactionNsu;
+                }
+                if ($invoice->status !== InvoiceStatus::Open) {
+                    return false;
+                }
+                $checkout->update([
+                    'status' => CheckoutStatus::Paid, 'transaction_nsu' => $payment->reference->transactionNsu,
+                    'paid_amount_cents' => $payment->paidAmount, 'installments' => $payment->installments,
+                    'capture_method' => $payment->captureMethod, 'verified_at' => $this->clock->now(),
+                ]);
+                $attempt = $this->recordAttempt($invoice, ChargeResult::succeeded($payment->reference->transactionNsu, 'infinitepay_verified'));
+                $this->markPaid($invoice, $attempt);
+
+                return true;
+            }));
+        } catch (UniqueConstraintViolationException $exception) {
+            if (PaymentCheckout::query()->where('transaction_nsu', $payment->reference->transactionNsu)->whereKeyNot($checkout->id)->exists()) {
+                return false;
+            }
+            throw $exception;
+        }
+    }
+
+    public function issueAdjustment(SubscriptionPlanChanged $event): Invoice
+    {
+        $existing = Invoice::query()->where('subscription_change_id', $event->changeId)->first();
+        if ($existing !== null) {
+            return $existing;
+        }
+        $quote = $event->quote ?? throw new LogicException('An adjustment requires priced terms.');
+        $ttl = config('infinitepay.checkout_ttl_seconds');
+        $deadline = $this->clock->now()->addSeconds(is_int($ttl) ? max(60, min(31536000, $ttl)) : 604800)
+            ->min($event->subscription->current_period_end);
+        $invoice = Invoice::query()->create([
+            'customer_id' => $event->subscription->customer_id, 'subscription_id' => $event->subscription->id,
+            'subscription_change_id' => $event->changeId, 'kind' => InvoiceKind::Adjustment, 'status' => InvoiceStatus::Open,
+            'subtotal' => $quote->subtotal, 'discount' => $quote->discount, 'tax' => $quote->tax, 'total' => $quote->total,
+            'pricing_degraded' => $quote->isDegraded(), 'pricing_region' => $event->pricingRegion,
+            'coupon_code' => $event->couponCode, 'period_start' => $event->subscription->current_period_start,
+            'period_end' => $event->subscription->current_period_end, 'due_at' => $this->clock->now(),
+            'next_attempt_at' => $this->clock->now(), 'payment_deadline_at' => $deadline, 'attempt_count' => 0,
+        ]);
+        InvoiceIssued::dispatch($invoice);
+
+        return $invoice;
+    }
+
+    public function expireAdjustment(Invoice $invoice): Invoice
+    {
+        return $this->withLock($invoice, function () use ($invoice): Invoice {
+            $invoice->refresh();
+
+            return $this->adjustmentDeadlinePassed($invoice) ? $this->expireAdjustmentLocked($invoice) : $invoice;
+        });
+    }
+
+    private function adjustmentDeadlinePassed(Invoice $invoice): bool
+    {
+        return $invoice->kind === InvoiceKind::Adjustment && $invoice->status === InvoiceStatus::Open
+            && $invoice->payment_deadline_at !== null && $invoice->payment_deadline_at <= $this->clock->now();
+    }
+
+    private function expireAdjustmentLocked(Invoice $invoice): Invoice
+    {
+        return DB::transaction(function () use ($invoice): Invoice {
+            $invoice->update(['status' => InvoiceStatus::Void, 'next_attempt_at' => null]);
+            $this->revertAdjustment($invoice);
+
+            return $invoice->refresh();
+        });
+    }
+
+    private function revertAdjustment(Invoice $invoice): void
+    {
+        if ($invoice->kind === InvoiceKind::Adjustment && $invoice->subscription_change_id !== null) {
+            $this->subscriptions->revertPlanChange(SubscriptionChange::query()->findOrFail($invoice->subscription_change_id));
+        }
     }
 
     /**
@@ -166,24 +347,42 @@ final readonly class BillingService
         if ($invoice->pricing_degraded) {
             throw InvoiceNotChargeableException::pricingDegraded();
         }
+
+        if ($invoice->due_at > $this->clock->now()
+            || ($invoice->next_attempt_at !== null && $invoice->next_attempt_at > $this->clock->now())) {
+            throw InvoiceNotChargeableException::notDue();
+        }
     }
 
     /**
-     * A fully discounted invoice is settled without touching the gateway.
-     *
-     * A zero-value charge is a fee for nothing, and some gateways reject it
-     * outright — which would look like a payment failure and start dunning a
-     * customer who owes us nothing.
+     * Record settlement consistently, whether money arrived at the gateway or
+     * the invoice has no amount to collect. Neither path remains in dunning.
      */
-    private function settleWithoutCharging(Invoice $invoice): Invoice
+    private function settle(Invoice $invoice): Invoice
     {
         DB::transaction(function () use ($invoice): void {
             $this->transitionTo($invoice, InvoiceStatus::Paid);
             $invoice->paid_at = $this->clock->now();
+            $invoice->next_attempt_at = null;
             $invoice->save();
         });
 
-        return $invoice->refresh();
+        $invoice->refresh();
+
+        $subscription = $invoice->subscription;
+
+        if ($invoice->kind === InvoiceKind::Adjustment && $invoice->subscription_change_id !== null) {
+            SubscriptionChange::query()->whereKey($invoice->subscription_change_id)->where('payment_status', 'pending')
+                ->update(['payment_status' => 'paid']);
+        }
+
+        if ($subscription !== null && $invoice->kind !== InvoiceKind::Adjustment
+            && ($subscription->status === SubscriptionStatus::PastDue
+                || ($invoice->kind === InvoiceKind::Initial && $subscription->status === SubscriptionStatus::PendingPayment))) {
+            $this->subscriptions->markActive($subscription);
+        }
+
+        return $invoice;
     }
 
     private function recordAttempt(Invoice $invoice, ChargeResult $result): ChargeAttempt
@@ -205,23 +404,7 @@ final readonly class BillingService
 
     private function markPaid(Invoice $invoice, ChargeAttempt $attempt): Invoice
     {
-        DB::transaction(function () use ($invoice): void {
-            $this->transitionTo($invoice, InvoiceStatus::Paid);
-            $invoice->paid_at = $this->clock->now();
-            // Settled: the sweep must never pick this up again.
-            $invoice->next_attempt_at = null;
-            $invoice->save();
-        });
-
-        $invoice->refresh();
-
-        // A subscription that was in dunning is now current again. This is the
-        // first caller markActive() has ever had.
-        $subscription = $invoice->subscription;
-
-        if ($subscription !== null && $subscription->status === SubscriptionStatus::PastDue) {
-            $this->subscriptions->markActive($subscription);
-        }
+        $invoice = $this->settle($invoice);
 
         InvoicePaid::dispatch($invoice, $attempt);
 
@@ -246,7 +429,7 @@ final readonly class BillingService
         // — so this is a bookkeeping change, not a punishment.
         $subscription = $invoice->subscription;
 
-        if ($subscription !== null && $subscription->status !== SubscriptionStatus::PastDue) {
+        if ($invoice->kind !== InvoiceKind::Adjustment && $subscription !== null && $subscription->status->canTransitionTo(SubscriptionStatus::PastDue)) {
             $this->subscriptions->markPastDue($subscription);
         }
 
@@ -265,6 +448,10 @@ final readonly class BillingService
         });
 
         $invoice->refresh();
+
+        if (! $willRetry) {
+            $this->revertAdjustment($invoice);
+        }
 
         PaymentFailed::dispatch(
             $invoice,
@@ -294,11 +481,12 @@ final readonly class BillingService
         $invoice->status = $target;
     }
 
-    private function findInvoiceForPeriod(Subscription $subscription): ?Invoice
+    private function findInvoiceForPeriod(Subscription $subscription, RenewalPeriod $period): ?Invoice
     {
         return Invoice::query()
             ->where('subscription_id', $subscription->id)
-            ->where('period_start', $subscription->current_period_start)
+            ->where('kind', '!=', InvoiceKind::Adjustment)
+            ->where('period_start', $period->start)
             ->first();
     }
 
@@ -351,13 +539,6 @@ final readonly class BillingService
         }
 
         return array_values(array_map(intval(...), array_filter($schedule, is_numeric(...))));
-    }
-
-    private function dueInDays(): int
-    {
-        $days = config('billing.dunning.due_in_days');
-
-        return is_int($days) ? $days : 0;
     }
 
     private function defaultRegion(): string

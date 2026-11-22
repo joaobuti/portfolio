@@ -7,6 +7,7 @@ namespace App\Jobs\Billing;
 use App\Exceptions\Billing\InvoiceNotChargeableException;
 use App\Models\Invoice;
 use App\Services\Billing\BillingService;
+use DateInterval;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -61,7 +62,14 @@ final class CollectInvoice implements ShouldBeUnique, ShouldQueue
 
     public function retryUntil(): DateTimeInterface
     {
-        return Carbon::now()->addHour();
+        $delay = $this->delay;
+        $availableAt = is_int($delay) || $delay instanceof DateTimeInterface || $delay instanceof DateInterval
+            ? $this->availableAt($delay)
+            : $this->currentTime();
+
+        // Laravel stores this deadline when it creates the queue payload.
+        // A future due date must not consume the infrastructure retry window.
+        return Carbon::createFromTimestamp(max($this->currentTime(), $availableAt))->addHour();
     }
 
     public function handle(BillingService $billing): void

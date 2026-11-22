@@ -18,22 +18,22 @@ it('renews the subscription it was given', function (): void {
     $subscription = Subscription::factory()
         ->for($this->plan, 'plan')
         ->period(
-            CarbonImmutable::parse('2026-05-01'),
-            CarbonImmutable::parse('2026-06-01'),
+            CarbonImmutable::parse('2026-05-10 03:00:00'),
+            CarbonImmutable::parse('2026-06-10 03:00:00'),
         )
         ->create();
 
     (new ProcessSubscriptionRenewal($subscription->uuid))->handle(app(SubscriptionService::class));
 
-    expect($subscription->fresh()?->current_period_end->toDateString())->toBe('2026-07-01');
+    expect($subscription->fresh()?->current_period_end->toDateString())->toBe('2026-07-10');
 });
 
 it('is safe to run twice — a retry must not double-advance the period', function (): void {
     $subscription = Subscription::factory()
         ->for($this->plan, 'plan')
         ->period(
-            CarbonImmutable::parse('2026-05-01'),
-            CarbonImmutable::parse('2026-06-01'),
+            CarbonImmutable::parse('2026-05-10 03:00:00'),
+            CarbonImmutable::parse('2026-06-10 03:00:00'),
         )
         ->create();
 
@@ -41,7 +41,7 @@ it('is safe to run twice — a retry must not double-advance the period', functi
     $job->handle(app(SubscriptionService::class));
     $job->handle(app(SubscriptionService::class));
 
-    expect($subscription->fresh()?->current_period_end->toDateString())->toBe('2026-07-01');
+    expect($subscription->fresh()?->current_period_end->toDateString())->toBe('2026-07-10');
 });
 
 it('shrugs off a subscription that was deleted after the job was queued', function (): void {

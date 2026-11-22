@@ -44,7 +44,11 @@ RUN composer install \
 # --------------------------------------------------------- development
 FROM base AS development
 
-RUN pecl install xdebug && docker-php-ext-enable xdebug
+ENV APP_ENV=local
+RUN apk add --no-cache --virtual .xdebug-build-deps $PHPIZE_DEPS linux-headers \
+    && pecl install xdebug \
+    && docker-php-ext-enable xdebug \
+    && apk del .xdebug-build-deps
 COPY docker/php/development.ini /usr/local/etc/php/conf.d/99-app.ini
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
@@ -54,19 +58,17 @@ ENTRYPOINT ["entrypoint"]
 # ---------------------------------------------------------- production
 FROM base AS production
 
+ENV APP_ENV=production APP_DEBUG=false
 COPY docker/php/production.ini /usr/local/etc/php/conf.d/99-app.ini
 COPY --from=vendor /var/www/html/vendor ./vendor
 COPY . .
 
-RUN composer dump-autoload --optimize --classmap-authoritative \
-    && php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan event:cache
+RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
 
 # Never run as root in production.
 RUN addgroup -g 1000 app && adduser -u 1000 -G app -s /bin/sh -D app \
     && chown -R app:app storage bootstrap/cache
 USER app
 
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint
 ENTRYPOINT ["entrypoint"]

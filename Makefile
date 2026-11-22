@@ -1,13 +1,13 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down logs shell test test-unit test-arch check lint analyse fresh worker tinker domain-check
+.PHONY: help up down logs shell test test-unit test-arch entrypoint-check check lint analyse fresh worker tinker domain-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-up: ## Start the whole stack (app, worker, scheduler, postgres, redis)
+up: ## Start all seven services
 	docker compose up -d --build
-	@echo "› http://localhost:8000/api/v1/plans"
+	@echo "› API: http://localhost:8000/api/v1 — see README.md for token setup"
 
 down: ## Stop everything and drop the volumes
 	docker compose down -v
@@ -18,16 +18,19 @@ logs: ## Tail the logs of every service
 shell: ## Open a shell in the app container
 	docker compose exec app sh
 
-test: ## Run the full suite
+test: ## Run the PHP suite (Unit, Arch and Feature)
 	docker compose exec app php artisan test
 
-test-unit: ## Run only the domain tests (no database, no containers)
+test-unit: ## Run PHP unit tests in the app container
 	docker compose exec app php artisan test --testsuite=Unit
 
 test-arch: ## Run only the architecture tests
 	docker compose exec app php artisan test --testsuite=Arch
 
-check: ## Everything CI runs, locally
+entrypoint-check: ## Check database readiness using .env in an isolated fixture
+	docker compose exec app sh tests/docker-entrypoint-check.sh
+
+check: ## Run PHP style, static analysis, Rector and tests
 	docker compose exec app composer check
 
 lint: ## Fix code style

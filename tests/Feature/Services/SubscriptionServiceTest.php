@@ -29,7 +29,7 @@ beforeEach(function (): void {
 });
 
 describe('create', function (): void {
-    it('starts an active subscription when the plan has no trial', function (): void {
+    it('starts a subscription awaiting payment when the plan has no trial', function (): void {
         Event::fake([SubscriptionCreated::class]);
 
         $subscription = $this->service->create(new CreateSubscriptionData(
@@ -37,10 +37,10 @@ describe('create', function (): void {
             planCode: 'basic',
         ));
 
-        expect($subscription->status)->toBe(SubscriptionStatus::Active)
+        expect($subscription->status)->toBe(SubscriptionStatus::PendingPayment)
             ->and($subscription->trial_ends_at)->toBeNull()
             ->and($subscription->current_period_start->toDateString())->toBe('2026-06-16')
-            ->and($subscription->current_period_end->toDateString())->toBe('2026-07-16');
+            ->and($subscription->current_period_end->toDateString())->toBe('2026-07-10');
 
         Event::assertDispatched(SubscriptionCreated::class);
     });
@@ -68,7 +68,7 @@ describe('create', function (): void {
             withTrial: false,
         ));
 
-        expect($subscription->status)->toBe(SubscriptionStatus::Active);
+        expect($subscription->status)->toBe(SubscriptionStatus::PendingPayment);
     });
 
     it('refuses a second subscription for a customer who already has access', function (): void {
@@ -83,7 +83,7 @@ describe('create', function (): void {
 
         $second = $this->service->create(new CreateSubscriptionData($this->customer->uuid, 'pro'));
 
-        expect($second->status)->toBe(SubscriptionStatus::Active)
+        expect($second->status)->toBe(SubscriptionStatus::PendingPayment)
             ->and($second->id)->not->toBe($first->id);
     });
 
@@ -275,15 +275,15 @@ describe('renew', function (): void {
             ->for($this->customer)
             ->for($this->basic, 'plan')
             ->period(
-                CarbonImmutable::parse('2026-05-01'),
-                CarbonImmutable::parse('2026-06-01'),
+                CarbonImmutable::parse('2026-05-10 03:00:00'),
+                CarbonImmutable::parse('2026-06-10 03:00:00'),
             )
             ->create();
 
         $renewed = $this->service->renew($subscription);
 
-        expect($renewed->current_period_start->toDateString())->toBe('2026-06-01')
-            ->and($renewed->current_period_end->toDateString())->toBe('2026-07-01');
+        expect($renewed->current_period_start->toDateString())->toBe('2026-06-10')
+            ->and($renewed->current_period_end->toDateString())->toBe('2026-07-10');
 
         Event::assertDispatched(SubscriptionRenewed::class);
     });
@@ -294,12 +294,12 @@ describe('renew', function (): void {
             ->for($this->basic, 'plan')
             ->status(SubscriptionStatus::Trialing)
             ->period(
-                CarbonImmutable::parse('2026-06-01'),
+                CarbonImmutable::parse('2026-06-10 03:00:00'),
                 CarbonImmutable::parse('2026-06-15'),
             )
             ->create(['trial_ends_at' => CarbonImmutable::parse('2026-06-15')]);
 
-        expect($this->service->renew($subscription)->status)->toBe(SubscriptionStatus::Active);
+        expect($this->service->renew($subscription)->status)->toBe(SubscriptionStatus::PendingPayment);
     });
 
     it('applies a queued downgrade at the period boundary', function (): void {
@@ -307,8 +307,8 @@ describe('renew', function (): void {
             ->for($this->customer)
             ->for($this->pro, 'plan')
             ->period(
-                CarbonImmutable::parse('2026-05-01'),
-                CarbonImmutable::parse('2026-06-01'),
+                CarbonImmutable::parse('2026-05-10 03:00:00'),
+                CarbonImmutable::parse('2026-06-10 03:00:00'),
             )
             ->create(['pending_plan_id' => $this->basic->id]);
 
@@ -324,8 +324,8 @@ describe('renew', function (): void {
             ->for($this->basic, 'plan')
             ->cancelingAtPeriodEnd()
             ->period(
-                CarbonImmutable::parse('2026-05-01'),
-                CarbonImmutable::parse('2026-06-01'),
+                CarbonImmutable::parse('2026-05-10 03:00:00'),
+                CarbonImmutable::parse('2026-06-10 03:00:00'),
             )
             ->create();
 
@@ -340,8 +340,8 @@ describe('renew', function (): void {
             ->for($this->customer)
             ->for($this->basic, 'plan')
             ->period(
-                CarbonImmutable::parse('2026-05-01'),
-                CarbonImmutable::parse('2026-06-01'),
+                CarbonImmutable::parse('2026-05-10 03:00:00'),
+                CarbonImmutable::parse('2026-06-10 03:00:00'),
             )
             ->create();
 
@@ -350,7 +350,7 @@ describe('renew', function (): void {
 
         // The second call sees a period end in the future and returns untouched.
         // This is what makes a retried queue job safe.
-        expect($second->current_period_end->toDateString())->toBe('2026-07-01');
+        expect($second->current_period_end->toDateString())->toBe('2026-07-10');
     });
 
     it('leaves a terminated subscription alone', function (): void {
@@ -359,7 +359,7 @@ describe('renew', function (): void {
             ->for($this->basic, 'plan')
             ->status(SubscriptionStatus::Expired)
             ->due()
-            ->create(['ended_at' => CarbonImmutable::parse('2026-05-01')]);
+            ->create(['ended_at' => CarbonImmutable::parse('2026-05-10 03:00:00')]);
 
         $before = $subscription->current_period_end;
 

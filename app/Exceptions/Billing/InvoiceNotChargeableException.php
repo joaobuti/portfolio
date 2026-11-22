@@ -43,6 +43,11 @@ final class InvoiceNotChargeableException extends DomainException
         );
     }
 
+    public static function notDue(): self
+    {
+        return new self('not_due', 'The next collection attempt is not due yet.');
+    }
+
     public function errorCode(): string
     {
         return 'invoice.not_chargeable';

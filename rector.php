@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Rector\CodeQuality\Rector\Class_\InlineConstructorDefaultToPropertyRector;
 use Rector\Config\RectorConfig;
+use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPublicMethodParameterRector;
 use Rector\Set\ValueObject\SetList;
 
 /**
@@ -27,10 +27,9 @@ return RectorConfig::configure()
         SetList::TYPE_DECLARATION,
         SetList::EARLY_RETURN,
     ])
-    ->withRules([
-        InlineConstructorDefaultToPropertyRector::class,
-    ])
     ->withSkip([
+        // Eloquent supplies the model to observer hooks; retain that contract.
+        RemoveUnusedPublicMethodParameterRector::class => [__DIR__.'/app/Observers/PlanObserver.php'],
         // Laravel's magic surface confuses these; they produce churn, not value.
         __DIR__.'/app/Http/Resources',
     ]);

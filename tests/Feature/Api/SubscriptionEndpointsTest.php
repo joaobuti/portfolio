@@ -30,7 +30,7 @@ describe('POST /api/v1/subscriptions', function (): void {
             'plan' => 'basic',
         ])
             ->assertCreated()
-            ->assertJsonPath('data.status.value', 'active')
+            ->assertJsonPath('data.status.value', 'pending_payment')
             ->assertJsonPath('data.plan.code', 'basic')
             ->assertJsonPath('data.plan.price.amount', 2990)
             ->assertJsonPath('data.plan.price.formatted', 'R$ 29,90');
@@ -90,7 +90,8 @@ describe('plan changes', function (): void {
     });
 
     it('applies an upgrade', function (): void {
-        $this->putJson("/api/v1/subscriptions/{$this->subscription->uuid}/plan", ['plan' => 'pro'])
+        $quote = $this->postJson("/api/v1/subscriptions/{$this->subscription->uuid}/plan/preview", ['plan' => 'pro'])->assertOk()->json('data.quote_id');
+        $this->putJson("/api/v1/subscriptions/{$this->subscription->uuid}/plan", ['plan' => 'pro', 'quote_id' => $quote])
             ->assertOk()
             ->assertJsonPath('data.plan.code', 'pro')
             ->assertJsonPath('data.pending_plan', null);
@@ -112,14 +113,15 @@ describe('plan changes', function (): void {
             )
             ->create();
 
-        $this->putJson("/api/v1/subscriptions/{$subscription->uuid}/plan", ['plan' => 'basic'])
+        $quote = $this->postJson("/api/v1/subscriptions/{$subscription->uuid}/plan/preview", ['plan' => 'basic'])->assertOk()->json('data.quote_id');
+        $this->putJson("/api/v1/subscriptions/{$subscription->uuid}/plan", ['plan' => 'basic', 'quote_id' => $quote])
             ->assertOk()
             ->assertJsonPath('data.plan.code', 'pro')
             ->assertJsonPath('data.pending_plan.code', 'basic');
     });
 
     it('returns a structured domain error for a same-plan change', function (): void {
-        $this->putJson("/api/v1/subscriptions/{$this->subscription->uuid}/plan", ['plan' => 'basic'])
+        $this->postJson("/api/v1/subscriptions/{$this->subscription->uuid}/plan/preview", ['plan' => 'basic'])
             ->assertUnprocessable()
             ->assertJsonPath('error.code', 'subscription.plan_change_not_allowed')
             ->assertJsonPath('error.context.reason', 'same_plan');

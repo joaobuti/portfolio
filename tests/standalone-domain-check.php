@@ -75,11 +75,11 @@ check('0.1 + 0.2 === 0.3 exactly', fn (): bool => Money::ofMajor('0.1', Currency
     ->add(Money::ofMajor('0.2', Currency::BRL))
     ->equals(Money::ofMajor('0.3', Currency::BRL)));
 
-check('formats BRL with the local separators', fn () => Money::ofMinor(123456, Currency::BRL)->format() === 'R$ 1.234,56'
+check('formats BRL with the local separators', fn (): string|true => Money::ofMinor(123456, Currency::BRL)->format() === 'R$ 1.234,56'
         ? true
         : Money::ofMinor(123456, Currency::BRL)->format());
 
-check('formats USD with the local separators', fn () => Money::ofMinor(123456, Currency::USD)->format() === '$ 1,234.56'
+check('formats USD with the local separators', fn (): string|true => Money::ofMinor(123456, Currency::USD)->format() === '$ 1,234.56'
         ? true
         : Money::ofMinor(123456, Currency::USD)->format());
 
@@ -183,19 +183,19 @@ $upgrade = $calculator->calculate(
     changedAt: new DateTimeImmutable('2026-06-16 09:00:00'),
 );
 
-check('counts a 30-day period', fn () => $upgrade->daysInPeriod === 30 ? true : $upgrade->daysInPeriod);
+check('counts a 30-day period', fn (): int|true => $upgrade->daysInPeriod === 30 ? true : $upgrade->daysInPeriod);
 
-check('counts 15 remaining days from June 16', fn () => $upgrade->daysRemaining === 15 ? true : $upgrade->daysRemaining);
+check('counts 15 remaining days from June 16', fn (): int|true => $upgrade->daysRemaining === 15 ? true : $upgrade->daysRemaining);
 
-check('credits half of the old plan (R$ 14,95)', fn () => $upgrade->creditFromCurrentPlan->toDecimal() === '14.95'
+check('credits half of the old plan (R$ 14,95)', fn (): string|true => $upgrade->creditFromCurrentPlan->toDecimal() === '14.95'
         ? true
         : $upgrade->creditFromCurrentPlan->toDecimal());
 
-check('charges half of the new plan (R$ 49,95)', fn () => $upgrade->chargeForNewPlan->toDecimal() === '49.95'
+check('charges half of the new plan (R$ 49,95)', fn (): string|true => $upgrade->chargeForNewPlan->toDecimal() === '49.95'
         ? true
         : $upgrade->chargeForNewPlan->toDecimal());
 
-check('nets R$ 35,00 due on upgrade', fn () => $upgrade->amountDue->toDecimal() === '35.00'
+check('nets R$ 35,00 due on upgrade', fn (): string|true => $upgrade->amountDue->toDecimal() === '35.00'
         ? true
         : $upgrade->amountDue->toDecimal());
 
@@ -211,7 +211,7 @@ $downgrade = $calculator->calculate(
 
 check('a downgrade produces a credit, not a charge', fn (): bool => $downgrade->isCredit());
 
-check('the downgrade credit mirrors the upgrade charge', fn () => $downgrade->amountDue->toDecimal() === '-35.00'
+check('the downgrade credit mirrors the upgrade charge', fn (): string|true => $downgrade->amountDue->toDecimal() === '-35.00'
         ? true
         : $downgrade->amountDue->toDecimal());
 
@@ -223,7 +223,7 @@ $sameDay = $calculator->calculate(
     $periodStart,
 );
 
-check('changing on day one charges the full difference', fn () => $sameDay->amountDue->toDecimal() === '70.00'
+check('changing on day one charges the full difference', fn (): string|true => $sameDay->amountDue->toDecimal() === '70.00'
         ? true
         : $sameDay->amountDue->toDecimal());
 
@@ -235,7 +235,7 @@ $lastMoment = $calculator->calculate(
     new DateTimeImmutable('2026-06-30 23:59:59'),
 );
 
-check('changing on the final day of the period charges a single day', fn () => $lastMoment->daysRemaining === 1 && $lastMoment->amountDue->toDecimal() === '2.33'
+check('changing on the final day of the period charges a single day', fn (): string|true => $lastMoment->daysRemaining === 1 && $lastMoment->amountDue->toDecimal() === '2.33'
         ? true
         : $lastMoment->daysRemaining.'d / '.$lastMoment->amountDue->toDecimal());
 
@@ -247,7 +247,7 @@ $afterEnd = $calculator->calculate(
     new DateTimeImmutable('2026-08-01 00:00:00'),
 );
 
-check('a date past the period end clamps to zero days', fn () => $afterEnd->daysRemaining === 0 ? true : $afterEnd->daysRemaining);
+check('a date past the period end clamps to zero days', fn (): int|true => $afterEnd->daysRemaining === 0 ? true : $afterEnd->daysRemaining);
 
 $beforeStart = $calculator->calculate(
     Money::ofMajor('29.90', Currency::BRL),
@@ -257,7 +257,7 @@ $beforeStart = $calculator->calculate(
     new DateTimeImmutable('2026-05-01 00:00:00'),
 );
 
-check('a date before the period start clamps to the full period', fn () => $beforeStart->daysRemaining === 30 ? true : $beforeStart->daysRemaining);
+check('a date before the period start clamps to the full period', fn (): int|true => $beforeStart->daysRemaining === 30 ? true : $beforeStart->daysRemaining);
 
 check('rejects an inverted period', function () use ($calculator, $periodStart, $periodEnd): bool {
     try {
@@ -283,7 +283,7 @@ check('a same-price change nets zero', fn (): bool => $calculator->calculate(
     new DateTimeImmutable('2026-06-13'),
 )->amountDue->isZero());
 
-check('reports the remaining percentage for display', fn () => $upgrade->remainingPercentage() === 50.0 ? true : $upgrade->remainingPercentage());
+check('reports the remaining percentage for display', fn (): float|true => $upgrade->remainingPercentage() === 50.0 ? true : $upgrade->remainingPercentage());
 
 check('ProrationResult::none() is inert', fn (): bool => ProrationResult::none(Money::zero(Currency::BRL))->amountDue->isZero());
 

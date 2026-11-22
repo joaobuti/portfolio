@@ -80,16 +80,15 @@ final readonly class HttpPricingClient implements PricingClient
 
         try {
             $quote = $this->toQuote($response, $amount);
+            if (! $quote->reconciles()) {
+                return $this->unhealthy($amount, $couponCode, 'quote_does_not_reconcile', [
+                    'subtotal' => $quote->subtotal->minorUnits,
+                    'total' => $quote->total->minorUnits,
+                ]);
+            }
         } catch (Throwable $exception) {
             return $this->unhealthy($amount, $couponCode, 'malformed_response', [
                 'message' => $exception->getMessage(),
-            ]);
-        }
-
-        if (! $quote->reconciles()) {
-            return $this->unhealthy($amount, $couponCode, 'quote_does_not_reconcile', [
-                'subtotal' => $quote->subtotal->minorUnits,
-                'total' => $quote->total->minorUnits,
             ]);
         }
 
@@ -108,7 +107,12 @@ final readonly class HttpPricingClient implements PricingClient
             ->connectTimeout($config['connect_timeout'])
             // Retry only connection failures. Retrying a 5xx would double the
             // load on a service that is already struggling.
-            ->retry($config['retries'] + 1, $config['retry_delay_ms'], throw: false)
+            ->retry(
+                $config['retries'] + 1,
+                $config['retry_delay_ms'],
+                static fn (Throwable $exception): bool => $exception instanceof ConnectionException,
+                throw: false,
+            )
             ->acceptJson()
             ->asJson()
             ->post('/v1/quote', array_filter([
@@ -162,6 +166,15 @@ final readonly class HttpPricingClient implements PricingClient
                 $currency->value,
                 $amount->currency->value,
             ));
+        }
+
+        if ($this->integer($body, 'subtotalMinorUnits') !== $amount->minorUnits) {
+            throw new RuntimeException('Pricing response subtotal differs from the requested amount.');
+        }
+
+        if ($this->integer($body, 'subtotalMinorUnits') - $this->integer($body, 'discountMinorUnits')
+            !== $this->integer($body, 'taxableMinorUnits')) {
+            throw new RuntimeException('Pricing response taxable amount does not reconcile.');
         }
 
         return new PriceQuote(

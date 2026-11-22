@@ -20,6 +20,7 @@ final readonly class PricedChange
     public function __construct(
         public ProrationResult $proration,
         public PriceQuote $quote,
+        public ?string $quoteId = null,
     ) {}
 
     /**

@@ -39,8 +39,9 @@ final class CollectDueInvoicesCommand extends Command
 
     public function handle(Clock $clock): int
     {
-        $asOf = $this->option('as-of') !== null
-            ? CarbonImmutable::parse((string) $this->option('as-of'))
+        $option = $this->option('as-of');
+        $asOf = is_string($option)
+            ? CarbonImmutable::parse($option)
             : $clock->now();
 
         $dryRun = (bool) $this->option('dry-run');

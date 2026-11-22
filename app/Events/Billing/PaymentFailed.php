@@ -34,16 +34,16 @@ use Illuminate\Queue\SerializesModels;
  * is why the middleware was built before this event existed — see
  * docs/ARCHITECTURE.md.
  */
-final class PaymentFailed
+final readonly class PaymentFailed
 {
     use Dispatchable;
     use SerializesModels;
 
     public function __construct(
-        public readonly Invoice $invoice,
-        public readonly ChargeAttempt $attempt,
-        public readonly PaymentFailureReason $reason,
-        public readonly int $attemptNumber,
-        public readonly bool $willRetry,
+        public Invoice $invoice,
+        public ChargeAttempt $attempt,
+        public PaymentFailureReason $reason,
+        public int $attemptNumber,
+        public bool $willRetry,
     ) {}
 }

@@ -1,7 +1,16 @@
 # ADR-0005: Pricing is a synchronous call with a degraded fallback
 
+**Amendment (2026-11-22):** [ADR-0011](0011-payment-activation-billing-day-and-adjustments.md)
+resolves the historical initial/adjustment/repricing gaps noted below and
+defines the approved payment calendar and rollback policy.
+
 **Status** Accepted
 **Date** 2026-09-01
+
+**Implementation note (2026-11-21):** Billing now persists invoice subtotal,
+discount, tax and total (ADR-0007). The historical limitation about unpersisted
+tax below still applies to plan-change adjustments, whose collection is not
+connected. See [current delivery status](../STATUS.md).
 
 ## Context
 

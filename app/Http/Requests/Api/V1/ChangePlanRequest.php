@@ -36,11 +36,13 @@ final class ChangePlanRequest extends FormRequest
                 'string',
                 Rule::exists('plans', 'code')->where('is_active', true),
             ],
+            'quote_id' => [Rule::requiredIf($this->isMethod('PUT')), 'uuid'],
             'apply_immediately' => ['sometimes', 'boolean'],
 
             // Only the shape is validated here. Whether the code exists and
             // applies is the pricing service's rule to own — checking it in
-            // two places is how the two answers start to disagree.
+            // two places is how the two answers start to disagree. Confirmation
+            // binds this context to the stored quote rather than repricing it.
             'coupon' => ['sometimes', 'nullable', 'string', 'max:64'],
         ];
     }

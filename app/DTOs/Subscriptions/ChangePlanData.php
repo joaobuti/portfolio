@@ -17,5 +17,7 @@ final readonly class ChangePlanData
          * it when a customer genuinely asks.
          */
         public bool $applyDowngradeImmediately = false,
+        public ?string $quoteId = null,
+        public ?string $couponCode = null,
     ) {}
 }

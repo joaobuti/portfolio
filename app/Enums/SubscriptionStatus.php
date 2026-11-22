@@ -14,6 +14,8 @@ namespace App\Enums;
  */
 enum SubscriptionStatus: string
 {
+    case PendingPayment = 'pending_payment';
+
     /** Inside the free trial window. Access granted, nothing charged yet. */
     case Trialing = 'trialing';
 
@@ -35,7 +37,8 @@ enum SubscriptionStatus: string
     public function allowedTransitions(): array
     {
         return match ($this) {
-            self::Trialing => [self::Active, self::PastDue, self::Canceled, self::Expired],
+            self::PendingPayment => [self::Active, self::Canceled, self::Expired],
+            self::Trialing => [self::PendingPayment, self::Active, self::PastDue, self::Canceled, self::Expired],
             self::Active => [self::PastDue, self::Canceled, self::Expired],
             self::PastDue => [self::Active, self::Canceled, self::Expired],
             self::Canceled => [self::Expired],
@@ -75,6 +78,7 @@ enum SubscriptionStatus: string
     public function label(): string
     {
         return match ($this) {
+            self::PendingPayment => 'Aguardando pagamento',
             self::Trialing => 'Em teste',
             self::Active => 'Ativa',
             self::PastDue => 'Pagamento pendente',

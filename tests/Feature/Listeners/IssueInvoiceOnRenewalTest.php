@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\DTOs\Pricing\PriceQuote;
 use App\Enums\InvoiceStatus;
 use App\Events\Subscriptions\SubscriptionRenewed;
 use App\Jobs\Billing\CollectInvoice;
@@ -10,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Services\Pricing\PricingClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Queue;
 
@@ -63,7 +65,9 @@ it('issues an invoice and queues its collection', function (): void {
 
     Queue::assertPushed(
         CollectInvoice::class,
-        fn (CollectInvoice $job): bool => $job->invoiceUuid === $invoice->uuid,
+        fn (CollectInvoice $job): bool => $job->invoiceUuid === $invoice->uuid
+            && $job->delay instanceof DateTimeInterface
+            && $job->delay->getTimestamp() === $invoice->next_attempt_at?->getTimestamp(),
     );
 });
 
@@ -80,6 +84,37 @@ it('issues but does not queue collection when pricing is degraded', function ():
     expect(Invoice::query()->firstOrFail()->pricing_degraded)->toBeTrue();
 
     Queue::assertNotPushed(CollectInvoice::class);
+});
+
+it('schedules regular collection for the next day10 boundary', function (): void {
+    app()->instance(PricingClient::class, new class implements PricingClient
+    {
+        public function quote(App\Support\Money $amount, string $region, ?string $couponCode = null): PriceQuote
+        {
+            return new PriceQuote(
+                subtotal: $amount,
+                discount: App\Support\Money::zero($amount->currency),
+                taxable: $amount,
+                tax: App\Support\Money::zero($amount->currency),
+                total: $amount,
+            );
+        }
+    });
+    Queue::fake();
+
+    app(IssueInvoiceOnRenewal::class)(
+        new SubscriptionRenewed($this->subscription, CarbonImmutable::parse('2026-07-01')),
+    );
+
+    $invoice = Invoice::query()->firstOrFail();
+
+    expect($invoice->next_attempt_at?->toDateTimeString())->toBe('2026-07-10 03:00:00');
+    Queue::assertPushed(
+        CollectInvoice::class,
+        fn (CollectInvoice $job): bool => $job->invoiceUuid === $invoice->uuid
+            && $job->delay instanceof DateTimeInterface
+            && $job->delay->getTimestamp() === $invoice->next_attempt_at?->getTimestamp(),
+    );
 });
 
 it('does not double-invoice when the listener runs twice', function (): void {

@@ -7,10 +7,16 @@ namespace App\Console\Commands;
 use App\Enums\RiskBand;
 use App\Models\Customer;
 use App\Support\Clock;
+use Illuminate\Cache\Repository;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Redis\Connections\PhpRedisConnection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Str;
 use JsonException;
+use LogicException;
 
 /**
  * Drains the risk worker's answers back into the billing core.
@@ -43,20 +49,46 @@ final class ConsumeRiskScoresCommand extends Command
             return self::SUCCESS;
         }
 
-        $limit = $this->limit();
         $key = $this->stream();
+
+        // One drainer owns the processing list; an interrupted run leaves its
+        // unacknowledged head there for the next owner to retry.
+        /** @var Repository $cache */
+        $cache = Cache::store('redis');
+        $store = $cache->getStore();
+        if (! $store instanceof LockProvider) {
+            throw new LogicException('The risk score drain requires a shared lock store.');
+        }
+        $result = $store->lock('risk:score-drain:'.hash('sha256', $key), 600)
+            ->get(fn (): int => $this->drain($clock, $key));
+
+        return is_int($result) ? $result : self::SUCCESS;
+    }
+
+    private function drain(Clock $clock, string $key): int
+    {
+        $limit = $this->limit();
+        $processing = $key.':processing';
+        /** @var PhpRedisConnection $redis */
+        $redis = Redis::connection('messaging');
 
         $applied = 0;
         $skipped = 0;
 
         for ($i = 0; $i < $limit; $i++) {
-            $raw = Redis::connection('messaging')->lpop($key);
+            $raw = $redis->lindex($processing, 0);
+            if (! is_string($raw)) {
+                $raw = $redis->lmove($key, $processing, 'LEFT', 'RIGHT');
+            }
 
             if (! is_string($raw)) {
                 break;
             }
 
             $this->apply($raw, $clock) ? $applied++ : $skipped++;
+            // Only acknowledge after a successful DB write or an intentional
+            // validation rejection. Exceptions leave the message recoverable.
+            $redis->lrem($processing, 1, $raw);
         }
 
         $this->components->info("{$applied} score(s) applied, {$skipped} skipped.");
@@ -72,7 +104,6 @@ final class ConsumeRiskScoresCommand extends Command
     private function apply(string $raw, Clock $clock): bool
     {
         try {
-            /** @var array<string, mixed> $message */
             $message = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             Log::warning('Discarded an unparseable risk score', [
@@ -82,7 +113,7 @@ final class ConsumeRiskScoresCommand extends Command
             return false;
         }
 
-        $data = $message['data'] ?? null;
+        $data = is_array($message) ? ($message['data'] ?? null) : null;
 
         if (! is_array($data)) {
             Log::warning('Discarded a risk score with no data object');
@@ -105,8 +136,15 @@ final class ConsumeRiskScoresCommand extends Command
             return false;
         }
 
+        $customerUuid = $data['customer_uuid'] ?? null;
+        if (! is_string($customerUuid) || ! Str::isUuid($customerUuid)) {
+            Log::warning('Discarded a risk score with an invalid customer UUID');
+
+            return false;
+        }
+
         $customer = Customer::query()
-            ->where('uuid', is_string($data['customer_uuid'] ?? null) ? $data['customer_uuid'] : '')
+            ->where('uuid', $customerUuid)
             ->first();
 
         if ($customer === null) {

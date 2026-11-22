@@ -29,6 +29,7 @@ final class PricedChangeResource extends JsonResource
         $proration = $this->proration;
 
         return [
+            'quote_id' => $this->quoteId,
             'amount_due' => $proration->amountDue,
             'credit_from_current_plan' => $proration->creditFromCurrentPlan,
             'charge_for_new_plan' => $proration->chargeForNewPlan,

@@ -177,7 +177,7 @@ class TestRetries:
         assert redis.llen(config.events_key) == 1
         assert redis.llen(config.processing_key) == 0
 
-    def test_releases_the_idempotency_claim_so_the_retry_can_run(
+    def test_failure_does_not_mark_the_message_completed(
         self, redis: Redis, config: Config, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Holding it would mean a transient failure permanently swallowed the
@@ -190,7 +190,7 @@ class TestRetries:
 
         consumer.run_once()
 
-        assert redis.get("risk:seen:msg-1") is None
+        assert redis.get("risk:completed:msg-1") is None
 
     def test_dead_letters_once_the_attempts_run_out(
         self, redis: Redis, config: Config, monkeypatch: pytest.MonkeyPatch
@@ -201,7 +201,7 @@ class TestRetries:
         )
         redis.rpush(config.events_key, message())
 
-        first = consumer.run_once()   # attempt 1 -> retried
+        first = consumer.run_once()  # attempt 1 -> retried
         second = consumer.run_once()  # attempt 2 -> max_attempts reached
 
         assert first.outcome == "retried"
@@ -235,9 +235,7 @@ class TestCrashRecovery:
         assert redis.llen(config.events_key) == 1
         assert redis.llen(config.processing_key) == 0
 
-    def test_recovery_is_a_no_op_when_nothing_is_in_flight(
-        self, consumer: Consumer
-    ) -> None:
+    def test_recovery_is_a_no_op_when_nothing_is_in_flight(self, consumer: Consumer) -> None:
         assert consumer.recover_stale() == 0
 
     def test_a_recovered_message_is_then_processed_normally(
@@ -249,3 +247,61 @@ class TestCrashRecovery:
 
         assert consumer.run_once().outcome == "scored"
         assert redis.llen(config.scores_key) == 1
+
+
+class TestDurableCompletion:
+    def test_crash_before_scoring_does_not_leave_a_completed_marker(
+        self, redis: Redis, config: Config, consumer: Consumer, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        original = consumer._score
+        monkeypatch.setattr(consumer, "_score", lambda event: (_ for _ in ()).throw(SystemExit()))
+        redis.rpush(config.events_key, message())
+        with pytest.raises(SystemExit):
+            consumer.run_once()
+        monkeypatch.setattr(consumer, "_score", original)
+        consumer.recover_stale()
+        consumer.recover_stale()
+        assert consumer.run_once().outcome == "scored"
+        assert redis.llen(config.scores_key) == 1
+
+    def test_publication_failure_leaves_the_message_recoverable(
+        self, redis: Redis, config: Config, consumer: Consumer, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from redis.exceptions import ConnectionError
+
+        original = consumer._publish
+        monkeypatch.setattr(
+            consumer, "_publish", lambda *args: (_ for _ in ()).throw(ConnectionError())
+        )
+        redis.rpush(config.events_key, message())
+        with pytest.raises(ConnectionError):
+            consumer.run_once()
+        monkeypatch.setattr(consumer, "_publish", original)
+        consumer.recover_stale()
+        consumer.recover_stale()
+        assert consumer.run_once().outcome == "scored"
+        assert redis.llen(config.scores_key) == 1
+
+    def test_concurrent_duplicate_messages_publish_once(self, redis: Redis, config: Config) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        redis.rpush(config.events_key, message(), message())
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: Consumer(redis, config).run_once().outcome, range(2)))
+        assert sorted(results) == ["duplicate", "scored"]
+        assert redis.llen(config.scores_key) == 1
+        assert redis.llen(config.processing_key) == 0
+
+    def test_invalid_utf8_reaches_dead_letter_with_original_bytes(self, config: Config) -> None:
+        import base64
+
+        client = Redis.from_url(os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/15"))
+        client.flushdb()
+        raw = b"\xff\xfe"
+        client.rpush(config.events_key, raw)
+        assert Consumer(client, config).run_once().outcome == "dead_lettered"
+        dead = json.loads(cast(bytes, client.lpop(config.dead_letter_key)))
+        assert dead["payload_encoding"] == "base64"
+        assert base64.b64decode(dead["payload"]) == raw
+        assert client.llen(config.processing_key) == 0
+        client.flushdb()

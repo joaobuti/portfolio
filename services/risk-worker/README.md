@@ -20,9 +20,11 @@ it leaves `processing` only once handled. A worker killed mid-message leaves it
 there and `recover_stale()` returns it — so the failure mode is a duplicate,
 never a loss.
 
-Duplicates are absorbed by idempotency (`SET risk:seen:<message_id> NX`), which
-has to exist for the pattern to be safe: at-least-once delivery plus a
-non-idempotent handler is data corruption with extra steps.
+Scoring is pure. A Redis Lua operation atomically publishes its result, writes
+`risk:completed:<message_id>` with a seven-day TTL, and acknowledges the input.
+A crash before that operation leaves a recoverable message; an ambiguous reply
+after commit cannot publish twice. Legacy `risk:seen:` in-progress markers are
+not treated as proof of completion.
 
 | Key | Role |
 | --- | --- |
@@ -30,7 +32,7 @@ non-idempotent handler is data corruption with extra steps.
 | `risk:events:processing` | in flight |
 | `risk:events:dead` | dead letters, original payload preserved |
 | `risk:scores` | outbound, read by Laravel |
-| `risk:seen:<id>` | idempotency claim, 7-day TTL |
+| `risk:completed:<id>` | committed-result deduplication, 7-day TTL |
 
 Malformed messages are dead-lettered **without** retrying — a payload that is
 not valid JSON will not become valid on the third attempt. Transient failures
@@ -83,3 +85,12 @@ starts with nothing set. `REDIS_URL`, `RISK_EVENTS_KEY`, `RISK_SCORES_KEY`,
 `RISK_MAX_ATTEMPTS`, `RISK_BLOCK_SECONDS`, `RISK_STALE_AFTER`,
 `RISK_IDEMPOTENCY_TTL`. The key names must match `config/risk.php` in the
 billing core.
+
+Laravel claims returned scores into `risk:scores:processing` and acknowledges
+only after persistence or intentional validation rejection. A database failure
+leaves the claimed message for the next drain.
+
+Non-UTF-8 dead letters preserve the original bytes as base64 with
+`payload_encoding: "base64"`. Text payloads use `payload_encoding: "utf-8"`.
+Custom event keys derive their processing/dead-letter keys unless explicitly
+overridden. Block time, max attempts and deduplication TTL must be positive.

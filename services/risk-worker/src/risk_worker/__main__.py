@@ -6,6 +6,7 @@ import json
 import logging
 import signal
 import sys
+import time
 from types import FrameType
 
 from redis import Redis
@@ -55,7 +56,7 @@ def main() -> int:
     logger = logging.getLogger("risk_worker")
 
     config = Config.from_env()
-    redis = Redis.from_url(config.redis_url, decode_responses=True)
+    redis = Redis.from_url(config.redis_url, decode_responses=False)
 
     consumer = Consumer(redis, config)
     running = True
@@ -85,8 +86,10 @@ def main() -> int:
             # Redis being briefly unreachable is an operational fact, not a
             # reason to exit and have the orchestrator restart us in a loop.
             logger.error("redis error, continuing", exc_info=exc)
+            time.sleep(1)
         except Exception as exc:
             logger.error("unexpected error, continuing", exc_info=exc)
+            time.sleep(1)
 
     logger.info("risk worker stopped")
 

@@ -26,14 +26,14 @@ processing list only once handled. A worker killed mid-message leaves it there
 and `recover_stale()` returns it — so the failure mode is a **duplicate, never
 a loss**.
 
-Duplicates are absorbed by `SET risk:seen:<message_id> NX`. That order matters:
-at-least-once delivery plus a non-idempotent handler is data corruption with
-extra steps, so the idempotency claim is what makes the pattern safe rather
-than an optimisation on top of it.
+Scoring is pure; only completion needs coordination. A Lua operation atomically
+publishes the score, stores `risk:completed:<message_id>` with its TTL, and
+acknowledges the input. Duplicates therefore cannot publish twice.
 
-Pub/sub was rejected in ADR-0003 for the reason that still applies: a
-subscriber restarting when a message is published never sees it, and a risk
-signal that silently vanishes is worse than none.
+**Implementation correction (2026-11-21):** The earlier pre-scoring
+`risk:seen:` claim could survive a crash before publication and cause recovery
+to discard unfinished work. Completed markers use a separate namespace so
+legacy claims cannot be mistaken for successfully published results.
 
 ### Malformed messages are not retried
 
@@ -42,9 +42,10 @@ It is dead-lettered immediately, with the **original bytes preserved** — a dea
 letter you cannot replay is a log line with extra steps. Transient failures do
 retry, up to `RISK_MAX_ATTEMPTS`.
 
-The idempotency claim is *released* before a retry. Holding it would mean a
-transient failure permanently swallowed the message, which is the opposite of
-what idempotency is for.
+Retry/dead-letter movement and input acknowledgment are atomic. Only successful
+publication writes the completed marker. Redis transport errors leave any
+unacknowledged input available for stale recovery. Non-UTF-8 payloads retain
+their exact original bytes in base64, labeled with `payload_encoding`.
 
 ### The envelope is the contract
 
@@ -89,13 +90,18 @@ customer's risk, whatever the other inputs say.
 An unrecognised reason from a future producer scores conservatively rather than
 being dropped — the failure happened, we just do not know what kind.
 
-### The return leg is a scheduled drain, not a second daemon
+### The return leg is a scheduled reliable drain, not a second daemon
 
 Volume is bounded by the number of failed payments. `risk:consume-scores` runs
 every five minutes and is defensive at every step: the producer is another
 service on its own deploy cycle, so an unparseable message, an unknown customer
 or a band this version has never heard of is dropped and logged rather than
 allowed to abort the drain and strand everything behind it.
+
+The drain claims scores into a processing list under a shared Redis lock and
+acknowledges only after a database save or intentional validation rejection.
+An interrupted drain retries its claimed head on its next run. Customer UUIDs
+are validated before querying Postgres.
 
 Scores land on `customers`, not in a history table. The question asked is "how
 risky is this customer now?", and one row per failure would be a table nobody

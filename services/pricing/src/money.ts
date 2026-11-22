@@ -74,7 +74,7 @@ function abs(value: bigint): bigint {
   return value < 0n ? -value : value;
 }
 
-function toSafeNumber(value: bigint): number {
+export function toSafeNumber(value: bigint): number {
   const asNumber = Number(value);
 
   if (!Number.isSafeInteger(asNumber)) {

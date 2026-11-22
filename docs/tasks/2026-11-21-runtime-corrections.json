@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-21-runtime-corrections",
+  "phase": "complete",
+  "scope": "Technical defects under existing rules; preserve first-invoice, adjustment-invoice and repricing decisions from prior round.",
+  "requirements": [
+    {
+      "id": "RUN-001",
+      "text": "Database readiness uses Laravel resolved connection configuration, including .env and cached config",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "docker/entrypoint.sh",
+        "tests/docker-entrypoint-check.sh",
+        ".gitlab-ci.yml",
+        "Makefile"
+      ]
+    },
+    {
+      "id": "RUN-002",
+      "text": "Renewal listener schedules collection at persisted next_attempt_at rather than charging before configured due date",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Listeners/Billing/IssueInvoiceOnRenewal.php",
+        "tests/Feature/Listeners/IssueInvoiceOnRenewalTest.php",
+        "app/Jobs/Billing/CollectInvoice.php",
+        "tests/Feature/Jobs/CollectInvoiceTest.php"
+      ]
+    },
+    {
+      "id": "RUN-003",
+      "text": "Zero-value settlement clears next_attempt_at and restores a past-due subscription, without a gateway charge or fabricated charge attempt",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Services/Billing/BillingService.php",
+        "tests/Feature/Services/Billing/BillingServiceTest.php"
+      ]
+    },
+    {
+      "id": "RUN-004",
+      "text": "Plan catalogue round-trips through serialized cache with class deserialization disabled; preserve output, order and invalidation",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "Postgres 17/Redis Feature run:147 passed,1 failed; second plan read returned PHP_Incomplete_Class",
+        "config/cache.php:serializable_classes=false",
+        "app/Services/Subscriptions/PlanCatalog.php",
+        "tests/Feature/Api/PlanEndpointsTest.php"
+      ]
+    },
+    {
+      "id": "RUN-005",
+      "text": "Correct existing PHPStan type errors without disabling checks: MoneyCast boundary types, afterCommit bool and APP_URL string",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "PHPStan:5 errors across app/Casts/MoneyCast.php, app/Listeners/Subscriptions/RecordSubscriptionActivity.php, config/filesystems.php",
+        "app/Casts/MoneyCast.php",
+        "tests/Unit/Support/MoneyCastTest.php",
+        "app/Listeners/Subscriptions/RecordSubscriptionActivity.php",
+        "config/filesystems.php"
+      ]
+    }
+  ],
+  "spec": {
+    "inputs": [
+      "Existing database configuration",
+      "Existing invoice and renewal events"
+    ],
+    "outputs": [
+      "Database readiness check",
+      "Scheduled collection job",
+      "Consistent paid invoice"
+    ],
+    "permissions": [
+      "Existing authorization unchanged"
+    ],
+    "dataLifecycle": [
+      "No schema changes; clear paid invoice retry timestamp"
+    ],
+    "failures": [
+      "Retry database readiness on connection failure",
+      "Degraded invoices still blocked"
+    ],
+    "acceptanceCriteria": [
+      "Regression tests reproduce failures before fixes",
+      "Focused and broader PHP checks pass where infrastructure supports them",
+      "No new financial policy",
+      "Cached plans use scalar arrays and are hydrated without enabling arbitrary PHP class deserialization; version cache key for format change",
+      "PHPStan maximum level passes without suppressions or a baseline; monetary cast accepts database integers/strings, retains null and Money-only write semantics, rejects non-scalar column values"
+    ],
+    "hasUi": false
+  },
+  "assumptions": [
+    "The existing paid-invoice reactivation behavior applies to zero-value settlement too; InvoicePaid continues to represent gateway-backed payment with its existing required ChargeAttempt."
+  ],
+  "verification": [
+    "Baseline focused tests: 22 passed",
+    "Before fixes: 3 new PHP regressions failed, 22 existing tests passed",
+    "Before fix: entrypoint fixture timed out while attempting raw PostgreSQL connection instead of .env SQLite configuration",
+    "After fixes: 25 focused tests passed, 60 assertions",
+    "After fix: entrypoint fixture passed",
+    "Pint on changed runtime/test PHP files: passed",
+    "Full PHP suite with SQLite/array cache plus real messaging Redis:267 passed,531 assertions",
+    "PHPStan found5 pre-existing errors in MoneyCast,RecordSubscriptionActivity and config/filesystems",
+    "Postgres17/Redis Feature run:147 passed,1 failed (catalogue class deserialization)",
+    "New money boundary regressions before fix:5 failed,9 passed",
+    "Database cache regression before fix:1 failed,6 passed",
+    "Final full PHP suite using PostgreSQL17 and Redis7:288 passed,588 assertions (PHP8.3, memory_limit=512M)",
+    "Final PHPStan level max:passed, no errors and no new suppressions",
+    "Pint:12 changed runtime/config/test files passed",
+    "Rector dry-run on changed runtime/test files:passed; existing duplicate-rule configuration warning remains",
+    "Standalone .env database readiness check:passed",
+    "sh -n entrypoint and regression script:passed",
+    "git diff --check and local documentation links:passed"
+  ],
+  "reviews": [
+    {
+      "reviewer": "review_corrections",
+      "status": "approved",
+      "requirements": [
+        "RUN-001",
+        "RUN-002",
+        "RUN-003",
+        "RUN-004",
+        "RUN-005"
+      ],
+      "evidence": "Independent diff/code review; initial queue-expiry finding resolved with real payload and worker regression tests; independent git diff --check passed",
+      "limitations": "Reviewer did not independently execute complete suite; executor results recorded above."
+    }
+  ],
+  "pendingBusinessDecisions": [
+    "Initial invoices without a trial",
+    "Plan-change adjustment invoices",
+    "Degraded invoice recovery"
+  ],
+  "corrections": [
+    {
+      "requirementId": "RUN-002",
+      "cause": "Initial regression tests used Queue::fake and missed payload retry expiry at dispatch time",
+      "fix": "Measure one-hour retry window from scheduled availability",
+      "prevention": "Database queue payload and actual worker execution tests for absolute, integer, interval, immediate and past delays",
+      "verification": "Before fix:3 future-delay scenarios failed,2 immediate/past scenarios passed"
+    }
+  ],
+  "environmentNotes": [
+    "All data services were isolated Docker containers on a dedicated network, without published ports or persistent volumes.",
+    "Initial broad run hit existing host-file ownership on logs; rerun used writable tmpfs logs and Pest temporary cache, without changing host permissions.",
+    "Initial full PostgreSQL run exceeded base-image128MB PHP memory limit; final successful run used512MB.",
+    "Node/Python suites and complete production-image build not rerun; no service source or dependency changes."
+  ],
+  "report": {
+    "status": "completed_authorized_scope",
+    "rows": [
+      {
+        "requirementId": "RUN-001",
+        "requested": "Database readiness uses Laravel resolved connection configuration, including .env and cached config",
+        "delivered": "Database readiness uses Laravel resolved connection configuration, including .env and cached config",
+        "evidence": [
+          "docker/entrypoint.sh",
+          "tests/docker-entrypoint-check.sh",
+          ".gitlab-ci.yml",
+          "Makefile"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "RUN-002",
+        "requested": "Renewal listener schedules collection at persisted next_attempt_at rather than charging before configured due date",
+        "delivered": "Renewal listener schedules collection at persisted next_attempt_at rather than charging before configured due date",
+        "evidence": [
+          "app/Listeners/Billing/IssueInvoiceOnRenewal.php",
+          "tests/Feature/Listeners/IssueInvoiceOnRenewalTest.php",
+          "app/Jobs/Billing/CollectInvoice.php",
+          "tests/Feature/Jobs/CollectInvoiceTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "RUN-003",
+        "requested": "Zero-value settlement clears next_attempt_at and restores a past-due subscription, without a gateway charge or fabricated charge attempt",
+        "delivered": "Zero-value settlement clears next_attempt_at and restores a past-due subscription, without a gateway charge or fabricated charge attempt",
+        "evidence": [
+          "app/Services/Billing/BillingService.php",
+          "tests/Feature/Services/Billing/BillingServiceTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "RUN-004",
+        "requested": "Plan catalogue round-trips through serialized cache with class deserialization disabled; preserve output, order and invalidation",
+        "delivered": "Plan catalogue round-trips through serialized cache with class deserialization disabled; preserve output, order and invalidation",
+        "evidence": [
+          "Postgres 17/Redis Feature run:147 passed,1 failed; second plan read returned PHP_Incomplete_Class",
+          "config/cache.php:serializable_classes=false",
+          "app/Services/Subscriptions/PlanCatalog.php",
+          "tests/Feature/Api/PlanEndpointsTest.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "RUN-005",
+        "requested": "Correct existing PHPStan type errors without disabling checks: MoneyCast boundary types, afterCommit bool and APP_URL string",
+        "delivered": "Correct existing PHPStan type errors without disabling checks: MoneyCast boundary types, afterCommit bool and APP_URL string",
+        "evidence": [
+          "PHPStan:5 errors across app/Casts/MoneyCast.php, app/Listeners/Subscriptions/RecordSubscriptionActivity.php, config/filesystems.php",
+          "app/Casts/MoneyCast.php",
+          "tests/Unit/Support/MoneyCastTest.php",
+          "app/Listeners/Subscriptions/RecordSubscriptionActivity.php",
+          "config/filesystems.php"
+        ],
+        "pending": "",
+        "reason": ""
+      }
+    ],
+    "pendingBusinessDecisions": [
+      "Initial invoices without a trial",
+      "Plan-change adjustment invoices",
+      "Degraded invoice recovery"
+    ],
+    "risks": [
+      "No production gateway or deployment executed; existing incomplete billing paths remain documented in docs/STATUS.md."
+    ]
+  }
+}

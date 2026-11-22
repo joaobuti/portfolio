@@ -69,14 +69,27 @@ class Config:
     idempotency_ttl_seconds: int = DEFAULT_IDEMPOTENCY_TTL_SECONDS
     stale_after_seconds: int = DEFAULT_STALE_AFTER_SECONDS
 
+    def __post_init__(self) -> None:
+        for name in ("max_attempts", "idempotency_ttl_seconds", "block_seconds"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive")
+        if self.stale_after_seconds < 0:
+            raise ValueError("stale_after_seconds must not be negative")
+
     @staticmethod
     def from_env() -> Config:
         return Config(
             redis_url=os.environ.get("REDIS_URL", DEFAULT_REDIS_URL),
             events_key=os.environ.get("RISK_EVENTS_KEY", DEFAULT_EVENTS_KEY),
             scores_key=os.environ.get("RISK_SCORES_KEY", DEFAULT_SCORES_KEY),
-            processing_key=os.environ.get("RISK_PROCESSING_KEY", DEFAULT_PROCESSING_KEY),
-            dead_letter_key=os.environ.get("RISK_DEAD_LETTER_KEY", DEFAULT_DEAD_LETTER_KEY),
+            processing_key=os.environ.get(
+                "RISK_PROCESSING_KEY",
+                f"{os.environ.get('RISK_EVENTS_KEY', DEFAULT_EVENTS_KEY)}:processing",
+            ),
+            dead_letter_key=os.environ.get(
+                "RISK_DEAD_LETTER_KEY",
+                f"{os.environ.get('RISK_EVENTS_KEY', DEFAULT_EVENTS_KEY)}:dead",
+            ),
             block_seconds=_int_env("RISK_BLOCK_SECONDS", DEFAULT_BLOCK_SECONDS),
             max_attempts=_int_env("RISK_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS),
             idempotency_ttl_seconds=_int_env(

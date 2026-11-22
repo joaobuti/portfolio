@@ -16,12 +16,14 @@ enum PlanChangeType: string
 {
     case Upgrade = 'upgrade';
     case Downgrade = 'downgrade';
+    case Reversion = 'reversion';
 
     public function label(): string
     {
         return match ($this) {
             self::Upgrade => 'Upgrade',
             self::Downgrade => 'Downgrade',
+            self::Reversion => 'Reversão por falta de pagamento',
         };
     }
 }

@@ -92,14 +92,16 @@ describe('POST /v1/quote', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ region: 'x'.repeat(20_000) }),
-    }).catch(() => null);
+    });
 
-    // The server destroys the socket once the cap is passed, so either a 413
-    // comes back or the connection drops. Both are correct; silently reading
-    // 20KB into memory is not.
-    if (response !== null) {
-      assert.equal(response.status, 413);
-    }
+    assert.equal(response.status, 413);
+    assert.equal((await response.json() as {error: {code: string}}).error.code, 'payload_too_large');
+  });
+
+  it('rejects an unsafe computed total through the documented 422 envelope', async () => {
+    const {status, body} = await postQuote({ amountMinorUnits: Number.MAX_SAFE_INTEGER - 1, currency: 'BRL', region: 'BR-SP' });
+    assert.equal(status, 422);
+    assert.equal((body as {error: {code: string}}).error.code, 'unprocessable_amount');
   });
 });
 

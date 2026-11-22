@@ -116,3 +116,9 @@ class TestMalformed:
         del payload["correlation_id"]
 
         assert parse(json.dumps(payload)).correlation_id is None
+
+
+@pytest.mark.parametrize("value", ["false", 0, 1, None])
+def test_requires_a_boolean_retry_flag(value: object) -> None:
+    with pytest.raises(MalformedMessage, match="will_retry"):
+        parse(envelope(will_retry=value))

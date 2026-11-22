@@ -26,7 +26,8 @@ return [
     | How hard we chase a failed payment before writing it off.
     |
     | The schedule is in days between attempts, and its length is the attempt
-    | limit: four entries means four retries after the first failure. Spread
+    | limit: four entries means at most four attempts including the first.
+    | The final failure does not schedule another interval. Spread
     | out rather than tight, because the common cause is a card that will be
     | topped up on payday, not a transient fault.
     |
@@ -40,12 +41,6 @@ return [
     'dunning' => [
         'retry_days' => [1, 3, 5, 7],
 
-        /*
-        | Days after issue that an invoice is due. Zero means immediately,
-        | which is what a subscription renewal wants: the service period has
-        | already started.
-        */
-        'due_in_days' => (int) env('BILLING_DUE_IN_DAYS', 0),
     ],
 
     /*

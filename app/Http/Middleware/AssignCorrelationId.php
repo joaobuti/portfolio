@@ -23,7 +23,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class AssignCorrelationId
 {
-    public const HEADER = 'X-Correlation-Id';
+    public const string HEADER = 'X-Correlation-Id';
 
     public function handle(Request $request, Closure $next): Response
     {

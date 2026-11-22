@@ -163,9 +163,24 @@ every log line. Lifecycle events go to a separate JSON-formatted `activity`
 channel, so an audit trail is searchable by `subscription_uuid` as a field
 rather than as a substring buried in prose.
 
-This is deliberately built now, before the Python worker exists, because a
-correlation id retrofitted across three languages is a migration and a
-correlation id designed in is a header.
+The Python risk worker also carries the correlation id from payment-failure
+events into its returned scores. Laravel consumes those scores every five
+minutes. See [ADR-0008](adr/0008-python-risk-worker-over-a-redis-list.md).
+
+## Current billing integration
+
+Synchronous initial/period/adjustment listeners persist invoices atomically
+with their subscription mutations. Gateway calls occur later through the
+collector; activation follows initial settlement. A queued renewal event runs
+after releasing the subscription lock, so synchronous queue drivers cannot
+acquire the same mutation lock recursively.
+
+Stored preview quotes bind ownership, mode, catalogue classification and the
+billed period. Pending upgrade adjustments block another change until payment
+or one audited reversion. An automatic pricing-recovery queue reprices eligible
+degraded invoices using current rules and persisted backoff, serializing with
+collection through the shared invoice lock. See
+[ADR-0011](adr/0011-payment-activation-billing-day-and-adjustments.md).
 
 ## What is deliberately absent
 
@@ -176,7 +191,17 @@ correlation id designed in is a header.
   swap it for something that will never arrive is ceremony.
 - **Registration, password reset, email verification.** This module issues
   tokens for accounts that already exist. Provisioning belongs with whatever
-  owns the customer lifecycle. (Authentication itself is no longer absent — see
-  below.)
+  owns the customer lifecycle. Authentication itself is implemented as described
+  above.
 - **A baseline file for PHPStan.** A baseline is a promise to fix things later
   that nobody keeps. This starts at level max.
+
+## Hosted payments
+
+InfinitePay is integrated natively in Laravel through `CheckoutGateway`,
+separate from synchronous `PaymentGateway` charging. A stored checkout intent
+precedes outbound HTTP. Unsigned callbacks enter a durable notification inbox;
+queue jobs verify payment server-to-server before atomic invoice settlement.
+The scheduler recovers missed jobs. Node pricing and Python risk remain
+independent services. See [ADR-0009](adr/0009-infinitepay-hosted-checkout.md)
+and the [OpenAPI contract](openapi.json).

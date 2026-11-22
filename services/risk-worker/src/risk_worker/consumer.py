@@ -14,9 +14,9 @@ silently vanishes is worse than none. A list is durable.
 leaves it there, and :func:`recover_stale` moves it back — so the failure mode
 is a duplicate delivery, never a lost one.
 
-Duplicates are then absorbed by idempotency, which is why that has to exist
-before this pattern is safe: at-least-once delivery plus a non-idempotent
-handler is just data corruption with extra steps.
+Scoring is pure. Publishing the result, recording completion and acknowledging
+the message are one Redis operation. A crash before it leaves recoverable work;
+a duplicate delivery after it cannot publish a second result.
 
 ## Attempts and the dead letter
 
@@ -31,19 +31,25 @@ not become valid on the third attempt.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import cast
+from typing import Protocol, cast
 
 from redis import Redis
+from redis.exceptions import RedisError
 
 from .config import Config
 from .envelope import MalformedMessage, PaymentFailedEvent, parse
 from .scoring import RiskAssessment, score_payment_failure
 
 logger = logging.getLogger("risk_worker")
+
+
+class RedisCommand(Protocol):
+    def __call__(self, *args: str | bytes | int) -> object: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +64,8 @@ class Consumer:
     def __init__(self, redis: Redis, config: Config) -> None:
         self._redis = redis
         self._config = config
+        # redis-py 5 exposes this binary-safe command API without annotations.
+        self._execute = cast(RedisCommand, redis.execute_command)
 
     # ---------------------------------------------------------------- public
 
@@ -78,25 +86,21 @@ class Consumer:
             # Not retried: it will not parse on the third attempt either.
             logger.warning("dead-lettering malformed message: %s", exc)
             self._dead_letter(raw, reason=str(exc), attempts=1)
-            self._ack(raw)
             return HandledResult(message_id=None, outcome="dead_lettered")
-
-        if not self._claim_idempotency(event.message_id):
-            logger.info(
-                "skipping already-processed message",
-                extra={"message_id": event.message_id},
-            )
-            self._ack(raw)
-            return HandledResult(message_id=event.message_id, outcome="duplicate")
 
         try:
             assessment = self._score(event)
+            published = self._publish(event, assessment, raw)
+        except RedisError:
+            # An ambiguous transport failure may have committed the Lua script.
+            # Leave any unacknowledged message for recovery; never remove a
+            # completed marker or invent another publication.
+            raise
         except Exception as exc:
             return self._handle_failure(raw, event, exc)
 
-        self._publish(event, assessment)
-        self._ack(raw)
-        self._clear_attempts(event.message_id)
+        if not published:
+            return HandledResult(message_id=event.message_id, outcome="duplicate")
 
         logger.info(
             "scored payment failure",
@@ -119,7 +123,7 @@ class Consumer:
         on a healthy worker.
         """
         marker = f"{self._config.processing_key}:since"
-        since = cast("str | None", self._redis.get(marker))
+        since = cast("str | bytes | None", self._redis.get(marker))
 
         # redis-py types every command as `sync | Awaitable` because one class
         # serves both clients. This client is synchronous; the casts say so
@@ -139,9 +143,7 @@ class Consumer:
             return 0
 
         recovered = 0
-        while self._redis.rpoplpush(
-            self._config.processing_key, self._config.events_key
-        ):
+        while self._redis.rpoplpush(self._config.processing_key, self._config.events_key):
             recovered += 1
 
         self._redis.delete(marker)
@@ -151,9 +153,9 @@ class Consumer:
 
     # --------------------------------------------------------------- private
 
-    def _claim(self) -> str | None:
+    def _claim(self) -> str | bytes | None:
         return cast(
-            "str | None",
+            "str | bytes | None",
             self._redis.blmove(
                 self._config.events_key,
                 self._config.processing_key,
@@ -163,10 +165,6 @@ class Consumer:
             ),
         )
 
-    def _ack(self, raw: str) -> None:
-        """Remove exactly one copy of this message from the processing list."""
-        self._redis.lrem(self._config.processing_key, 1, raw)
-
     def _score(self, event: PaymentFailedEvent) -> RiskAssessment:
         return score_payment_failure(
             reason=event.reason,
@@ -175,96 +173,113 @@ class Consumer:
             amount_minor=event.amount_minor,
         )
 
-    def _publish(self, event: PaymentFailedEvent, assessment: RiskAssessment) -> None:
-        self._redis.rpush(
-            self._config.scores_key,
-            json.dumps(
-                {
-                    "event": "risk.scored",
-                    # Echoed so the consumer on the other side can deduplicate
-                    # against the same key we did.
-                    "in_reply_to": event.message_id,
-                    "correlation_id": event.correlation_id,
-                    "data": {
-                        "customer_uuid": event.customer_uuid,
-                        "invoice_uuid": event.invoice_uuid,
-                        "score": assessment.score,
-                        "band": assessment.band.value,
-                        # Named contributions, so a support agent can account
-                        # for the number rather than trust it.
-                        "factors": [
-                            {"code": factor.code, "points": factor.points}
-                            for factor in assessment.factors
-                        ],
-                    },
+    def _publish(
+        self, event: PaymentFailedEvent, assessment: RiskAssessment, raw: str | bytes
+    ) -> bool:
+        # Scoring is pure. Only committing its result needs coordination:
+        # publish, remember completion and acknowledge in one Redis operation.
+        payload = json.dumps(
+            {
+                "event": "risk.scored",
+                # Echoed so the consumer on the other side can deduplicate
+                # against the same key we did.
+                "in_reply_to": event.message_id,
+                "correlation_id": event.correlation_id,
+                "data": {
+                    "customer_uuid": event.customer_uuid,
+                    "invoice_uuid": event.invoice_uuid,
+                    "score": assessment.score,
+                    "band": assessment.band.value,
+                    # Named contributions, so a support agent can account
+                    # for the number rather than trust it.
+                    "factors": [
+                        {"code": factor.code, "points": factor.points}
+                        for factor in assessment.factors
+                    ],
                 },
-                separators=(",", ":"),
-            ),
+            },
+            separators=(",", ":"),
+        )
+        return bool(
+            self._execute(
+                "EVAL",
+                """
+            if redis.call('EXISTS', KEYS[1]) == 1 then
+                redis.call('LREM', KEYS[3], 1, ARGV[2])
+                return 0
+            end
+            redis.call('RPUSH', KEYS[2], ARGV[1])
+            redis.call('SET', KEYS[1], '1', 'EX', ARGV[3])
+            redis.call('LREM', KEYS[3], 1, ARGV[2])
+            redis.call('HDEL', KEYS[4], ARGV[4])
+            return 1
+            """,
+                4,
+                self._idempotency_key(event.message_id),
+                self._config.scores_key,
+                self._config.processing_key,
+                self._attempts_key(),
+                payload,
+                raw,
+                self._config.idempotency_ttl_seconds,
+                event.message_id,
+            )
         )
 
     def _handle_failure(
-        self, raw: str, event: PaymentFailedEvent, exc: Exception
+        self, raw: str | bytes, event: PaymentFailedEvent, exc: Exception
     ) -> HandledResult:
         attempts = self._record_attempt(event.message_id)
 
-        # The idempotency claim is released so the retry is allowed to run.
-        # Holding it would mean a transient failure permanently swallowed the
-        # message — the exact opposite of what idempotency is for.
-        self._release_idempotency(event.message_id)
-
         if attempts >= self._config.max_attempts:
-            logger.error(
-                "dead-lettering after %d attempts: %s", attempts, exc, exc_info=exc
-            )
+            logger.error("dead-lettering after %d attempts: %s", attempts, exc, exc_info=exc)
             self._dead_letter(raw, reason=str(exc), attempts=attempts)
-            self._ack(raw)
             self._clear_attempts(event.message_id)
             return HandledResult(message_id=event.message_id, outcome="dead_lettered")
 
         logger.warning("returning message for retry (attempt %d): %s", attempts, exc)
-        self._redis.rpush(self._config.events_key, raw)
-        self._ack(raw)
+        self._move(raw, self._config.events_key, raw)
 
         return HandledResult(message_id=event.message_id, outcome="retried")
 
-    def _dead_letter(self, raw: str, *, reason: str, attempts: int) -> None:
-        self._redis.rpush(
-            self._config.dead_letter_key,
-            json.dumps(
-                {
-                    "failed_at": int(time.time()),
-                    "attempts": attempts,
-                    "error": reason,
-                    # The original bytes, untouched. A dead letter you cannot
-                    # replay is a log line with extra steps.
-                    "payload": raw,
-                },
-                separators=(",", ":"),
-            ),
+    def _dead_letter(self, raw: str | bytes, *, reason: str, attempts: int) -> None:
+        encoding = "utf-8"
+        if isinstance(raw, bytes):
+            try:
+                payload = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                payload = base64.b64encode(raw).decode("ascii")
+                encoding = "base64"
+        else:
+            payload = raw
+        dead = json.dumps(
+            {
+                "failed_at": int(time.time()),
+                "attempts": attempts,
+                "error": reason,
+                "payload": payload,
+                "payload_encoding": encoding,
+            },
+            separators=(",", ":"),
+        )
+        self._move(raw, self._config.dead_letter_key, dead)
+
+    def _move(self, raw: str | bytes, destination: str, payload: str | bytes) -> None:
+        self._execute(
+            "EVAL",
+            "redis.call('RPUSH', KEYS[2], ARGV[1]); "
+            "return redis.call('LREM', KEYS[1], 1, ARGV[2])",
+            2,
+            self._config.processing_key,
+            destination,
+            payload,
+            raw,
         )
 
     # -- idempotency ------------------------------------------------------
 
     def _idempotency_key(self, message_id: str) -> str:
-        return f"risk:seen:{message_id}"
-
-    def _claim_idempotency(self, message_id: str) -> bool:
-        """True if this worker won the right to process the message.
-
-        SET NX is atomic, so two workers racing on a redelivered message cannot
-        both proceed.
-        """
-        return bool(
-            self._redis.set(
-                self._idempotency_key(message_id),
-                1,
-                nx=True,
-                ex=self._config.idempotency_ttl_seconds,
-            )
-        )
-
-    def _release_idempotency(self, message_id: str) -> None:
-        self._redis.delete(self._idempotency_key(message_id))
+        return f"risk:completed:{message_id}"
 
     # -- attempts ---------------------------------------------------------
 

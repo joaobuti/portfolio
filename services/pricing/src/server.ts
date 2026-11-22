@@ -36,7 +36,7 @@ export function createApp(): Server {
   });
 
   // A request that opens a socket and says nothing must not hold a worker
-  // slot open forever. Shorter than the client's own timeout by design.
+  // slot open forever. The caller's shorter timeout controls its fallback.
   server.requestTimeout = 5_000;
   server.headersTimeout = 5_000;
 
@@ -72,6 +72,7 @@ async function handleQuote(request: IncomingMessage, response: ServerResponse): 
   try {
     raw = await readBody(request);
   } catch (error) {
+    response.setHeader('connection', 'close');
     send(response, 413, {
       error: {
         code: 'payload_too_large',
@@ -128,7 +129,8 @@ function readBody(request: IncomingMessage): Promise<string> {
       if (size > MAX_BODY_BYTES) {
         // Stop reading immediately. Buffering an unbounded body is how a
         // small service becomes a memory-exhaustion target.
-        request.destroy();
+        chunks.length = 0;
+        request.pause();
         reject(new Error(`The request body exceeds ${MAX_BODY_BYTES} bytes.`));
 
         return;

@@ -9,23 +9,55 @@ set -e
 role="${CONTAINER_ROLE:-app}"
 
 wait_for_dependencies() {
-    echo "› waiting for postgres at ${DB_HOST:-postgres}:${DB_PORT:-5432}"
-    until php -r "new PDO('pgsql:host='.getenv('DB_HOST').';port='.getenv('DB_PORT').';dbname='.getenv('DB_DATABASE'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'));" 2>/dev/null; do
+    echo "› waiting for the configured database"
+    # Use the same resolved configuration as migrations and workers. Values in
+    # .env are loaded by Laravel, not exported into the shell's environment.
+    until php -r '
+        require "vendor/autoload.php";
+        $app = require "bootstrap/app.php";
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $app->make("db")->connection()->getPdo();
+    ' >/dev/null 2>&1; do
         sleep 1
     done
 }
 
 bootstrap_application() {
-    [ -f .env ] || cp .env.example .env
-    [ -d vendor ] || composer install --no-interaction --prefer-dist
-    grep -q '^APP_KEY=base64' .env || php artisan key:generate --force
+    if [ "${APP_ENV:-production}" != production ] && [ ! -f .env ]; then
+        cp .env.example .env
+    fi
+    [ -f vendor/autoload.php ] || composer install --no-interaction --prefer-dist
+    if [ "${APP_ENV:-production}" = production ]; then
+        php artisan config:clear
+    fi
+    if ! php -r '
+        require "vendor/autoload.php";
+        $app = require "bootstrap/app.php";
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        exit(is_string(config("app.key")) && config("app.key") !== "" ? 0 : 1);
+    '; then
+        if [ "${APP_ENV:-production}" = production ]; then
+            echo 'APP_KEY must be supplied for production.' >&2
+            exit 1
+        fi
+        php artisan key:generate --force
+    fi
+    if [ "${APP_ENV:-production}" = production ]; then
+        # Runtime secrets and service addresses must be injected before caching.
+        php artisan config:cache
+        php artisan route:cache
+        php artisan event:cache
+    fi
 }
 
 case "$role" in
     app)
         bootstrap_application
         wait_for_dependencies
-        php artisan migrate --force --seed
+        php artisan migrate --force
+        if [ "${APP_ENV:-production}" != production ]; then
+            php artisan db:seed --force
+        fi
         echo "› serving on http://localhost:8000"
         exec php artisan serve --host=0.0.0.0 --port=8000
         ;;

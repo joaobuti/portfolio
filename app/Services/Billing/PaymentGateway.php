@@ -8,14 +8,9 @@ use App\DTOs\Billing\ChargeResult;
 use App\Support\Money;
 
 /**
- * Takes money.
- *
- * ## Why the interface earns its place
- *
- * Unlike a repository over Eloquent, this one has two real implementations
- * from day one — {@see FakePaymentGateway} and whatever Stripe or Pagar.me
- * adapter ships later — and the second is guaranteed to arrive. That is the
- * test ADR-0001 sets for an abstraction, and this passes it.
+ * Synchronous collection contract, currently implemented by FakePaymentGateway.
+ * Hosted links use CheckoutGateway instead: creating a link does not charge
+ * an invoice, and payment confirmation arrives asynchronously.
  *
  * ## The contract
  *

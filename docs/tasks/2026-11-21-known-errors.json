@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-21-known-errors",
+  "phase": "complete",
+  "scope": "Correct previously identified errors without introducing billing rules; documentation, help text and comments only.",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "text": "Document authenticated API access and local account setup",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "README.md",
+        "routes/api.php",
+        "database/factories/UserFactory.php"
+      ]
+    },
+    {
+      "id": "REQ-002",
+      "text": "Correct service count and obsolete Python-worker descriptions",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "README.md",
+        "docker-compose.yml",
+        "docs/ARCHITECTURE.md",
+        "docker compose config --services: seven services"
+      ]
+    },
+    {
+      "id": "REQ-003",
+      "text": "Remove unverified passing status and accurately describe check commands",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "README.md",
+        "Makefile",
+        "make help: passed",
+        "make -n check test test-unit up: passed"
+      ]
+    },
+    {
+      "id": "REQ-004",
+      "text": "Reconcile completion claims with implemented billing paths",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "docs/STATUS.md",
+        "docs/ARCHITECTURE.md",
+        "docs/adr/0004-proration-and-plan-change-policy.md",
+        "docs/adr/0005-synchronous-pricing-with-a-degraded-fallback.md",
+        "docs/adr/0007-invoices-charge-attempts-and-dunning.md"
+      ]
+    },
+    {
+      "id": "REQ-005",
+      "text": "Connect initial invoicing without a trial",
+      "disposition": "human decision",
+      "status": "pending",
+      "reason": "Initial payment timing and activation behavior on failure need definition; documented in docs/STATUS.md."
+    },
+    {
+      "id": "REQ-006",
+      "text": "Collect immediate upgrade proration",
+      "disposition": "human decision",
+      "status": "pending",
+      "reason": "Immediate-upgrade policy already exists; adjustment invoice model, quote binding and failure outcome remain undefined. Existing period uniqueness must be respected."
+    },
+    {
+      "id": "REQ-007",
+      "text": "Recover degraded invoices",
+      "disposition": "human decision",
+      "status": "pending",
+      "reason": "Recovery mode and pricing date/rules need definition; documented in docs/STATUS.md."
+    }
+  ],
+  "acceptanceCriteria": [
+    "No runtime billing or authorization change",
+    "README authentication example matches routes, factory and token resource",
+    "Seven services match Compose config",
+    "No unsupported pipeline success claim",
+    "Check command descriptions match Makefile and composer.json",
+    "Incomplete financial paths explicitly documented"
+  ],
+  "verification": [
+    "git diff --check: passed",
+    "make help: passed",
+    "docker compose config --services: passed",
+    "make -n check test test-unit up: passed",
+    "Local documentation links: 25 checked, all resolve",
+    "Changed PHP files: executable contents unchanged after stripping comments and whitespace"
+  ],
+  "limitations": [
+    "PHP suite and live authentication walkthrough not executed; PHP unavailable in host shell and application containers stopped. No runtime code changed."
+  ],
+  "reviews": [
+    {
+      "reviewer": "review_corrections",
+      "status": "approved",
+      "scope": "All seven requirements compared with diff, code and verification evidence",
+      "independentChecks": [
+        "git diff --check: passed",
+        "docker compose config --services: seven services"
+      ],
+      "limitations": [
+        "No live authentication walkthrough or PHP test execution"
+      ]
+    }
+  ],
+  "report": {
+    "status": "completed_authorized_scope",
+    "rows": [
+      {
+        "requirementId": "REQ-001",
+        "requested": "Document authenticated API access and local account setup",
+        "delivered": "Document authenticated API access and local account setup",
+        "evidence": [
+          "README.md",
+          "routes/api.php",
+          "database/factories/UserFactory.php"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "REQ-002",
+        "requested": "Correct service count and obsolete Python-worker descriptions",
+        "delivered": "Correct service count and obsolete Python-worker descriptions",
+        "evidence": [
+          "README.md",
+          "docker-compose.yml",
+          "docs/ARCHITECTURE.md",
+          "docker compose config --services: seven services"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "REQ-003",
+        "requested": "Remove unverified passing status and accurately describe check commands",
+        "delivered": "Remove unverified passing status and accurately describe check commands",
+        "evidence": [
+          "README.md",
+          "Makefile",
+          "make help: passed",
+          "make -n check test test-unit up: passed"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "REQ-004",
+        "requested": "Reconcile completion claims with implemented billing paths",
+        "delivered": "Reconcile completion claims with implemented billing paths",
+        "evidence": [
+          "docs/STATUS.md",
+          "docs/ARCHITECTURE.md",
+          "docs/adr/0004-proration-and-plan-change-policy.md",
+          "docs/adr/0005-synchronous-pricing-with-a-degraded-fallback.md",
+          "docs/adr/0007-invoices-charge-attempts-and-dunning.md"
+        ],
+        "pending": "",
+        "reason": ""
+      },
+      {
+        "requirementId": "REQ-005",
+        "requested": "Connect initial invoicing without a trial",
+        "delivered": "Current behavior and required decisions documented in docs/STATUS.md",
+        "evidence": [
+          "docs/STATUS.md"
+        ],
+        "pending": "Connect initial invoicing without a trial",
+        "reason": "Initial payment timing and activation behavior on failure need definition; documented in docs/STATUS.md."
+      },
+      {
+        "requirementId": "REQ-006",
+        "requested": "Collect immediate upgrade proration",
+        "delivered": "Current behavior and required decisions documented in docs/STATUS.md",
+        "evidence": [
+          "docs/STATUS.md"
+        ],
+        "pending": "Collect immediate upgrade proration",
+        "reason": "Immediate-upgrade policy already exists; adjustment invoice model, quote binding and failure outcome remain undefined. Existing period uniqueness must be respected."
+      },
+      {
+        "requirementId": "REQ-007",
+        "requested": "Recover degraded invoices",
+        "delivered": "Current behavior and required decisions documented in docs/STATUS.md",
+        "evidence": [
+          "docs/STATUS.md"
+        ],
+        "pending": "Recover degraded invoices",
+        "reason": "Recovery mode and pricing date/rules need definition; documented in docs/STATUS.md."
+      }
+    ],
+    "pending": [
+      "Initial invoicing, adjustment collection and degraded-invoice recovery depend on documented billing decisions"
+    ],
+    "runtimeChanges": "None; PHP and Compose edits are comments only, Make changes are help/output text."
+  }
+}

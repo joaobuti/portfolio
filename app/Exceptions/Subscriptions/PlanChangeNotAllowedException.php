@@ -38,6 +38,16 @@ final class PlanChangeNotAllowedException extends DomainException
         return new self('status', "A subscription in \"{$status}\" cannot change plans.");
     }
 
+    public static function invalidQuote(): self
+    {
+        return new self('invalid_quote', 'The quote does not match this subscription, plan or billing period.');
+    }
+
+    public static function pendingPayment(): self
+    {
+        return new self('pending_adjustment', 'Resolve the pending plan adjustment before changing plans again.');
+    }
+
     public function errorCode(): string
     {
         return 'subscription.plan_change_not_allowed';

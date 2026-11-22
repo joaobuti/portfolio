@@ -66,6 +66,8 @@ enum UserRole: string
                 TokenAbility::PlansRead,
                 TokenAbility::SubscriptionsRead,
                 TokenAbility::SubscriptionsWrite,
+                TokenAbility::InvoicesRead,
+                TokenAbility::InvoicesWrite,
             ],
         };
     }

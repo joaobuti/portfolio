@@ -15,11 +15,12 @@ use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Services\Billing\BillingService;
+use App\Services\Billing\PaymentGateway;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Event;
 
 beforeEach(function (): void {
-    freezeClockAt('2026-06-16 09:00:00');
+    $this->clock = freezeClockAt('2026-06-16 09:00:00');
 
     // Pricing off, so every quote is degraded and the tests that care about
     // tax say so explicitly. See the pricing block below.
@@ -108,11 +109,39 @@ describe('collecting', function (): void {
         // it — which would look like a failure and start dunning a customer
         // who owes nothing.
         $invoice = Invoice::factory()->for($this->customer)->totalling(0)->create();
+        $gateway = Mockery::mock(PaymentGateway::class);
+        $gateway->shouldNotReceive('charge');
+        app()->instance(PaymentGateway::class, $gateway);
+
+        $collected = app(BillingService::class)->collect($invoice);
+
+        expect($collected->status)->toBe(InvoiceStatus::Paid)
+            ->and($collected->attempts()->count())->toBe(0);
+    });
+
+    it('clears the scheduled attempt when a zero-value invoice is settled', function (): void {
+        $invoice = Invoice::factory()->for($this->customer)->totalling(0)->create([
+            'next_attempt_at' => CarbonImmutable::parse('2026-06-16 09:00:00'),
+        ]);
 
         $collected = $this->service->collect($invoice);
 
         expect($collected->status)->toBe(InvoiceStatus::Paid)
+            ->and($collected->paid_at?->toDateTimeString())->toBe('2026-06-16 09:00:00')
+            ->and($collected->next_attempt_at)->toBeNull()
             ->and($collected->attempts()->count())->toBe(0);
+    });
+
+    it('restores a past-due subscription when its zero-value invoice is settled', function (): void {
+        $subscription = subscriptionOn($this->customer);
+        $subscription->update(['status' => SubscriptionStatus::PastDue]);
+        $invoice = Invoice::factory()->for($this->customer)->for($subscription)->totalling(0)->create();
+
+        $this->service->collect($invoice);
+
+        expect($subscription->fresh()?->status)->toBe(SubscriptionStatus::Active)
+            ->and($invoice->fresh()?->attempt_count)->toBe(0)
+            ->and($invoice->attempts()->count())->toBe(0);
     });
 
     it('refuses to charge an already-paid invoice', function (): void {
@@ -151,7 +180,7 @@ describe('failure and dunning', function (): void {
             PaymentFailed::class,
             fn (PaymentFailed $event): bool => $event->reason === PaymentFailureReason::Declined
                 && $event->attemptNumber === 1
-                && $event->willRetry === true,
+                && $event->willRetry,
         );
     });
 
@@ -196,6 +225,7 @@ describe('failure and dunning', function (): void {
         $this->service->collect($invoice); // attempt 1, will retry
         expect($invoice->fresh()?->status)->toBe(InvoiceStatus::Open);
 
+        $this->clock->travelTo($this->clock->now()->addDays(2));
         $this->service->collect($invoice->fresh()); // attempt 2, limit reached
         expect($invoice->fresh()?->status)->toBe(InvoiceStatus::Uncollectible)
             ->and($invoice->fresh()?->attempt_count)->toBe(2);
@@ -238,6 +268,7 @@ describe('the retry schedule', function (): void {
         $invoice = Invoice::factory()->for($this->customer)->decliningAmount()->create();
 
         $this->service->collect($invoice);
+        $this->clock->travelTo($this->clock->now()->addDays(2));
         $this->service->collect($invoice->fresh());
 
         // Second failure is the last of the schedule, so it is written off and
@@ -269,9 +300,11 @@ describe('the retry schedule', function (): void {
         config()->set('billing.dunning.retry_days', [1, 2, 3, 4]);
         $invoice = Invoice::factory()->for($this->customer)->decliningAmount()->create();
         $this->service->collect($invoice);
+        $this->clock->travelTo($this->clock->now()->addDays(2));
         $this->service->collect($invoice->fresh());
 
         config()->set('billing.dunning.retry_days', [1]);
+        $this->clock->travelTo($this->clock->now()->addDays(2));
 
         expect(fn () => $this->service->collect($invoice->fresh()))->not->toThrow(Throwable::class);
     });

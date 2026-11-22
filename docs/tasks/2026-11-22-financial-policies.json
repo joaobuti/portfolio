@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-22-financial-policies",
+  "phase": "verified",
+  "scope": "Implement the approved activation-after-payment, immediate proportional initial charge, day10 calendar, preserved upgrade quotes/reversion and automatic current-rule recovery policies.",
+  "requirements": [
+    {
+      "id": "FIN-001",
+      "text": "No access before the first payment; regular payments on day10",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Enums/SubscriptionStatus.php:pending_payment",
+        "app/Services/Subscriptions/BillingCalendar.php:SP day10 and whole-day initial proportions",
+        "app/Listeners/Billing/IssueInitialInvoice.php",
+        "app/Events/Subscriptions/SubscriptionBillingPeriodStarted.php",
+        "app/Listeners/Billing/IssuePeriodInvoice.php:transactional period invoice",
+        "database/migrations/2026_11_22_000003_add_initial_and_adjustment_billing.php:pending+access unique guard",
+        "FinancialPolicyTest:initial gating, settlement, trial conversion, calendar boundaries and queue-publication recovery"
+      ]
+    },
+    {
+      "id": "FIN-002",
+      "text": "Preserve upgrade pricing/tax/coupon conditions and revert upgrade if payment fails",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "app/Models/PlanChangeQuote.php",
+        "app/Services/Subscriptions/SubscriptionService.php:single snapshot quote, ownership/mode/period binding, idempotent consume and reversion audit",
+        "app/Http/Requests/Api/V1/ChangePlanRequest.php:public confirmation requires quote_id",
+        "app/Services/Billing/BillingService.php:separate adjustment, exhausted failure rollback, deadline and late payment reconciliation",
+        "app/Jobs/Billing/ExpireAdjustmentInvoice.php",
+        "FinancialPolicyTest:quoted tax/coupon, catalogue change before/during application, mode/context rejection, retries, deadline, prior downgrade restoration, payment kinds and shortened-period upgrade"
+      ]
+    },
+    {
+      "id": "FIN-003",
+      "text": "Automatically recalculate degraded invoices using pricing rules current at recovery time",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "database/migrations/2026_11_22_000002_add_invoice_pricing_recovery.php",
+        "app/Services/Billing/BillingService.php:repriceDegraded",
+        "app/Jobs/Billing/RepriceDegradedInvoice.php",
+        "app/Console/Commands/RepriceDegradedInvoicesCommand.php",
+        "routes/console.php:automatic sweep",
+        "FinancialPolicyTest:current-rule recovery, persisted outage backoff, no reprice after paid/intent and recovery collection idempotency"
+      ]
+    },
+    {
+      "id": "FIN-004",
+      "text": "Update financial documentation, API contract and verified regression evidence",
+      "disposition": "implement",
+      "status": "done",
+      "evidence": [
+        "docs/adr/0011-payment-activation-billing-day-and-adjustments.md",
+        "README.md",
+        "docs/STATUS.md",
+        "docs/ARCHITECTURE.md",
+        "docs/OPERATIONS.md",
+        "docs/openapi.json:pending state, quote_id confirmation, invoice kind/deadline and reversion metadata",
+        "Full PHP suite384tests/1009assertions;93.9%coverage;SQLite financial22tests/102assertions",
+        "PHPStan max, Pint205files, full Rector, OpenAPI3.1 validation and production smoke passed"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "OWNER-001",
+      "text": "Initial activation requires payment; regular payment day10",
+      "source": "owner message2026-11-22"
+    },
+    {
+      "id": "OWNER-002",
+      "text": "Upgrade retains quoted terms and reverts on payment failure",
+      "source": "owner message2026-11-22"
+    },
+    {
+      "id": "OWNER-003",
+      "text": "Degraded invoice recovery is automatic and uses current pricing rules",
+      "source": "owner message2026-11-22"
+    },
+    {
+      "id": "OWNER-004",
+      "text": "Immediate proportional first payment, next regular payments day10",
+      "source": "owner clarification2026-11-22"
+    },
+    {
+      "id": "OWNER-005",
+      "text": "Revert upgrade only after retries exhausted or payment deadline expires",
+      "source": "owner clarification2026-11-22"
+    }
+  ],
+  "pendingQuestions": [],
+  "spec": {
+    "states": [
+      "degraded open invoice",
+      "recovered priced invoice",
+      "paid/terminal invoice unchanged",
+      "existing checkout/attempt immutable",
+      "Subscription pending_payment denies access and blocks duplicate signup",
+      "Upgrade pending/paid/reverted, one unresolved change at a time",
+      "Quote bound to subscription/from/to/period; already applied quote cannot charge twice"
+    ],
+    "inputs": [
+      "Scheduled degraded invoice sweep",
+      "Stored invoice base subtotal",
+      "Current pricing-service tax/coupon rules"
+    ],
+    "outputs": [
+      "Updated tax/discount/total, pricing_degraded false and resumed due collection"
+    ],
+    "permissions": [
+      "Internal scheduler/jobs only; no new public write endpoint"
+    ],
+    "dataLifecycle": [
+      "Shared invoice lock serializes repricing with collection and confirmation",
+      "Store recovery audit time and attempt schedule",
+      "Persisted service-period base subtotal remains the contracted base; tax/discount rules refresh at recovery time",
+      "Initial invoice and subscription created atomically; regular period endpoints align to day10 America/Sao_Paulo using whole-day proportional first period",
+      "Adjustment quote and invoice created atomically with upgrade; distinct adjustment identities coexist with unique regular period invoices",
+      "Confirmed paid quote remains immutable; degraded quote recovers current rules against original subtotal and stored region/coupon context",
+      "Upgrade payment deadline follows existing checkout TTL, capped by the current period end; no card decline is inferred from an outage or unsigned callback"
+    ],
+    "failures": [
+      "Repeated pricing outage leaves invoice blocked, with bounded retry backoff",
+      "Never reprice paid/terminal invoices or invoices with a payment intent/charge audit",
+      "Recovery commit before collection dispatch; existing due sweep recovers missed dispatches"
+    ],
+    "acceptanceCriteria": [
+      "Old totals remain until a nondegraded valid current quote is available",
+      "No duplicate collection or checkout creations across job retries",
+      "Backoff avoids re-hitting an unhealthy pricing dependency on every scrape/run",
+      "Existing synchronous fake and InfinitePay paths retain their invariants",
+      "Initial grant only on initial invoice settlement; adjustment cannot activate an unpaid period",
+      "First failure retains upgrade; retry exhaustion or unpaid deadline reverts once with audit",
+      "Quote ownership, stale period/from/to and duplicate consumption guarded",
+      "Late payment after a reverted upgrade reconciles without reapplying plan or duplicate audit"
+    ],
+    "hasUi": false
+  },
+  "assumptions": [
+    "Rule refresh applies to tax/discount pricing against the stored contracted subtotal; changing a catalogue price never silently replaces the invoiced base amount.",
+    "No live financial requests or account activation performed.",
+    "The original FIN001 question explicitly concerned signups without a trial. Existing free trials retain access as the approved prior exception; trial conversion now waits for first payment."
+  ],
+  "verification": [
+    {
+      "check": "Full PHP Unit/Arch/Feature on PostgreSQL17 and Redis7",
+      "result": "passed",
+      "tests": 384,
+      "assertions": 1009,
+      "coveragePercent": 93.9,
+      "coverageGatePercent": 80
+    },
+    {
+      "check": "Financial regressions and migrations on SQLite/array cache",
+      "result": "passed",
+      "tests": 22,
+      "assertions": 102
+    },
+    {
+      "check": "PHPStan maximum level",
+      "result": "passed"
+    },
+    {
+      "check": "Full Pint",
+      "result": "passed",
+      "files": 205
+    },
+    {
+      "check": "Full Rector dryrun",
+      "result": "passed"
+    },
+    {
+      "check": "OpenAPI3.1 validator, runtime route/scope contract and git diff --check",
+      "result": "passed",
+      "operations": 16
+    },
+    {
+      "check": "Production Docker build, cached config/routes/events, fresh isolated migrations and in-process fake financial flow",
+      "result": "passed",
+      "flow": [
+        "initial invoice created atomically with pending subscription",
+        "initial settlement activates",
+        "stored quote creates distinct adjustment",
+        "adjustment settlement and paid change audit",
+        "real bearer-token monitoring request parsed"
+      ],
+      "noFinancialHttpRequests": true
+    },
+    {
+      "check": "Prometheus parser against production response",
+      "result": "passed",
+      "families": 9,
+      "series": 24,
+      "note": "New pending_payment series adds one bounded label value; historical metrics-only task had23series."
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "/root/review_corrections",
+      "result": "approved FIN-001 through FIN-004; final ledger, documentation and complete verification evidence independently checked",
+      "coverage": [
+        "activation and trial boundary",
+        "quote mode and catalogue races",
+        "invoice/period atomicity and queue loss",
+        "invoice/subscription lock ordering",
+        "exhaustion/expiry and late payment reconciliation",
+        "calendar proportional basis and SP midnight behavior"
+      ],
+      "findingsResolved": [
+        "Quote mode/classification initially not persisted",
+        "Catalogue was re-read after pricing HTTP",
+        "Trial conversion could re-acquire subscription lock through sync collection",
+        "Invoice could be absent after post-commit renewal publication failure"
+      ],
+      "finalConfirmation": "No material inconsistencies.384tests/1009assertions,93.9%coverage,SQLite regressions,static/OpenAPI gates and fake production smoke confirmed. Real InfinitePay activation remains separately pending."
+    }
+  ],
+  "corrections": [
+    {
+      "cause": "Quote preservation originally bound only values, allowing a scheduled downgrade to be consumed as immediate or classification to change with catalogue pricing",
+      "fix": "Persist effective mode and upgrade classification, validate context and capture a single snapshot before pricing HTTP",
+      "prevention": "Regressions for alternate downgrade mode and catalogue changes both during and after pricing",
+      "verification": "Financial tests and full suite passed"
+    },
+    {
+      "cause": "Renewal publication while holding the subscription lock could trigger synchronous collection and recursive activation lock acquisition",
+      "fix": "Create immutable queued renewal event under lock and publish after release; no collection in synchronous invoicing hooks",
+      "prevention": "Trial conversion regression with real invoicing listener and immediate CollectInvoice execution",
+      "verification": "Full PostgreSQL/Redis and SQLite financial tests passed"
+    },
+    {
+      "cause": "Publication after state commit could leave pending first-payment subscription without invoice on queue/process failure",
+      "fix": "Synchronous billing-period event creates the invoice inside the period transaction; collection sweep recovers missed post-commit dispatch",
+      "prevention": "Injected post-commit publication failure verifies pending subscription still has initial invoice and collectible timestamp",
+      "verification": "Full suite passed"
+    },
+    {
+      "cause": "A shortened initial period cannot use full plan prices divided by only its shortened day count; UTC midnight could also shift the local remaining-day calculation",
+      "fix": "Use the full anchored interval denominator and a consistent Sao Paulo timezone for anchored upgrade proration",
+      "prevention": "Initial100->80 plus upgrade100->200 produces80 adjustment, including UTC-midnight/local-same-day regression",
+      "verification": "22 financial tests passed on both database paths; independent calendar review approved"
+    }
+  ],
+  "report": {
+    "status": "verified",
+    "rows": [
+      {
+        "requirementId": "FIN-001",
+        "requested": "No access before the first payment; regular payments on day10",
+        "delivered": "Immediate proportional first invoice, access blocked until initial settlement, SP day10 recurring boundaries; existing trial exception retained and conversion waits for payment",
+        "evidence": [
+          "app/Enums/SubscriptionStatus.php:pending_payment",
+          "app/Services/Subscriptions/BillingCalendar.php:SP day10 and whole-day initial proportions",
+          "app/Listeners/Billing/IssueInitialInvoice.php",
+          "app/Events/Subscriptions/SubscriptionBillingPeriodStarted.php",
+          "app/Listeners/Billing/IssuePeriodInvoice.php:transactional period invoice",
+          "database/migrations/2026_11_22_000003_add_initial_and_adjustment_billing.php:pending+access unique guard",
+          "FinancialPolicyTest:initial gating, settlement, trial conversion, calendar boundaries and queue-publication recovery"
+        ],
+        "pending": null,
+        "reason": null
+      },
+      {
+        "requirementId": "FIN-002",
+        "requested": "Preserve upgrade pricing/tax/coupon conditions and revert upgrade if payment fails",
+        "delivered": "Bound stored quote and atomic distinct adjustment invoice; retry exhaustion/unpaid deadline revert once, restoring previous plan and scheduled downgrade; shortened first-period upgrade uses full anchor denominator",
+        "evidence": [
+          "app/Models/PlanChangeQuote.php",
+          "app/Services/Subscriptions/SubscriptionService.php:single snapshot quote, ownership/mode/period binding, idempotent consume and reversion audit",
+          "app/Http/Requests/Api/V1/ChangePlanRequest.php:public confirmation requires quote_id",
+          "app/Services/Billing/BillingService.php:separate adjustment, exhausted failure rollback, deadline and late payment reconciliation",
+          "app/Jobs/Billing/ExpireAdjustmentInvoice.php",
+          "FinancialPolicyTest:quoted tax/coupon, catalogue change before/during application, mode/context rejection, retries, deadline, prior downgrade restoration, payment kinds and shortened-period upgrade"
+        ],
+        "pending": null,
+        "reason": null
+      },
+      {
+        "requirementId": "FIN-003",
+        "requested": "Automatically recalculate degraded invoices using pricing rules current at recovery time",
+        "delivered": "Automatic guarded current-rule repricing with persisted backoff, recovery metadata and resumed collection",
+        "evidence": [
+          "database/migrations/2026_11_22_000002_add_invoice_pricing_recovery.php",
+          "app/Services/Billing/BillingService.php:repriceDegraded",
+          "app/Jobs/Billing/RepriceDegradedInvoice.php",
+          "app/Console/Commands/RepriceDegradedInvoicesCommand.php",
+          "routes/console.php:automatic sweep",
+          "FinancialPolicyTest:current-rule recovery, persisted outage backoff, no reprice after paid/intent and recovery collection idempotency"
+        ],
+        "pending": null,
+        "reason": null
+      },
+      {
+        "requirementId": "FIN-004",
+        "requested": "Update financial documentation, API contract and verified regression evidence",
+        "delivered": "Documented owner decisions/API behavior, regression/static/architecture/coverage and independent semantic review",
+        "evidence": [
+          "docs/adr/0011-payment-activation-billing-day-and-adjustments.md",
+          "README.md",
+          "docs/STATUS.md",
+          "docs/ARCHITECTURE.md",
+          "docs/OPERATIONS.md",
+          "docs/openapi.json:pending state, quote_id confirmation, invoice kind/deadline and reversion metadata",
+          "Full PHP suite384tests/1009assertions;93.9%coverage;SQLite financial22tests/102assertions",
+          "PHPStan max, Pint205files, full Rector, OpenAPI3.1 validation and production smoke passed"
+        ],
+        "pending": null,
+        "reason": null
+      }
+    ],
+    "pending": [
+      "InfinitePay real account settings and activation remain an external operational step from the prior task."
+    ],
+    "risks": [
+      "No real payment was executed; tests use fakes.",
+      "Existing free trials remain a prior exception to non-trial initial access gating.",
+      "Late verified payments after upgrade reversion require reconciliation; refunds remain outside scope.",
+      "Rollback of financial migration refuses pending/adjustment data until reconciled."
+    ]
+  },
+  "continuation": {
+    "implementationComplete": true,
+    "nextIndependentBacklog": "React dashboard/generated client",
+    "externalActivation": "Supply real InfiniteTag, authorized API key and public callback securely; no activation or deployment performed.",
+    "temporaryResources": "Dedicated local verification containers/network removed after final checks.",
+    "operations": "Migrate before starting updated workers; keep billing queue and hourly renewal/minute collection/reprice/expiry scheduler running."
+  }
+}

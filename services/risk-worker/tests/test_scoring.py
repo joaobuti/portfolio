@@ -40,12 +40,15 @@ class TestReasonOrdering:
         # It says nothing about the customer. Scoring it like a decline would
         # let an outage on our side mark good payers as risky.
         assert score(reason=REASON_NETWORK_ERROR) < 30
-        assert score_payment_failure(
-            reason=REASON_NETWORK_ERROR,
-            attempt_number=1,
-            will_retry=True,
-            amount_minor=10_000,
-        ).band is Band.LOW
+        assert (
+            score_payment_failure(
+                reason=REASON_NETWORK_ERROR,
+                attempt_number=1,
+                will_retry=True,
+                amount_minor=10_000,
+            ).band
+            is Band.LOW
+        )
 
 
 class TestOurOwnBugs:

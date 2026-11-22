@@ -17,11 +17,11 @@ declare(strict_types=1);
 */
 
 arch('money, enums and DTOs never touch the framework')
-    ->expect(['App\Support\Money', 'App\Enums', 'App\DTOs'])
+    ->expect([App\Support\Money::class, 'App\Enums', 'App\DTOs'])
     ->not->toUse('Illuminate');
 
 arch('the proration calculator depends on nothing but PHP and Money')
-    ->expect('App\Services\Subscriptions\ProrationCalculator')
+    ->expect(App\Services\Subscriptions\ProrationCalculator::class)
     ->not->toUse(['Illuminate', 'App\Models', 'App\Http']);
 
 arch('services never reach back into the HTTP layer')
@@ -31,22 +31,22 @@ arch('services never reach back into the HTTP layer')
 arch('controllers delegate rather than query')
     ->expect('App\Http\Controllers')
     ->not->toUse([
-        'Illuminate\Support\Facades\DB',
-        'Illuminate\Support\Facades\Cache',
-        'Illuminate\Database\Eloquent\Builder',
+        Illuminate\Support\Facades\DB::class,
+        Illuminate\Support\Facades\Cache::class,
+        Illuminate\Database\Eloquent\Builder::class,
     ]);
 
 arch('form requests validate and nothing else')
     ->expect('App\Http\Requests')
-    ->not->toUse(['App\Services', 'Illuminate\Support\Facades\DB']);
+    ->not->toUse(['App\Services', Illuminate\Support\Facades\DB::class]);
 
 arch('events carry data, they do not do work')
     ->expect('App\Events')
-    ->not->toUse(['App\Services', 'Illuminate\Support\Facades\DB']);
+    ->not->toUse(['App\Services', Illuminate\Support\Facades\DB::class]);
 
 arch('jobs are queued, never accidentally synchronous')
     ->expect('App\Jobs')
-    ->toImplement('Illuminate\Contracts\Queue\ShouldQueue');
+    ->toImplement(Illuminate\Contracts\Queue\ShouldQueue::class);
 
 arch('no debugging statements survive')
     ->expect(['dd', 'dump', 'ray', 'var_dump', 'die'])
@@ -62,7 +62,7 @@ arch('everything declares strict types')
     ->toUseStrictTypes();
 
 arch('value objects and DTOs are immutable')
-    ->expect(['App\DTOs', 'App\Support\Money'])
+    ->expect(['App\DTOs', App\Support\Money::class])
     ->toBeReadonly();
 
 arch('enums are string backed so they persist and read well')
@@ -74,15 +74,15 @@ arch('classes are final unless designed for extension')
     ->classes()
     ->toBeFinal()
     ->ignoring([
-        'App\Exceptions\DomainException',
-        'App\Http\Controllers\Controller',
-        'App\Providers\AppServiceProvider',
+        App\Exceptions\DomainException::class,
+        App\Http\Controllers\Controller::class,
+        App\Providers\AppServiceProvider::class,
     ]);
 
 arch('every domain exception is renderable by the one handler rule')
     ->expect('App\Exceptions')
-    ->toExtend('App\Exceptions\DomainException')
-    ->ignoring('App\Exceptions\DomainException');
+    ->toExtend(App\Exceptions\DomainException::class)
+    ->ignoring(App\Exceptions\DomainException::class);
 
 arch()->preset()->php();
 arch()->preset()->security();

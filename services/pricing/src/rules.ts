@@ -58,13 +58,13 @@ const TAX_RULES: Readonly<Record<string, TaxRule>> = {
 export function findTaxRule(region: string): TaxRule | null {
   const normalised = region.trim().toUpperCase();
 
-  if (normalised in TAX_RULES) {
+  if (Object.hasOwn(TAX_RULES, normalised)) {
     return TAX_RULES[normalised] ?? null;
   }
 
   const country = normalised.split('-')[0] ?? '';
 
-  return TAX_RULES[country] ?? null;
+  return Object.hasOwn(TAX_RULES, country) ? TAX_RULES[country] ?? null : null;
 }
 
 /**
@@ -120,5 +120,6 @@ const COUPONS: Readonly<Record<string, Coupon>> = {
 };
 
 export function findCoupon(code: string): Coupon | null {
-  return COUPONS[code.trim().toUpperCase()] ?? null;
+  const normalised = code.trim().toUpperCase();
+  return Object.hasOwn(COUPONS, normalised) ? COUPONS[normalised] ?? null : null;
 }

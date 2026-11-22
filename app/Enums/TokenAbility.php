@@ -27,6 +27,9 @@ enum TokenAbility: string
     case PlansRead = 'plans:read';
     case SubscriptionsRead = 'subscriptions:read';
     case SubscriptionsWrite = 'subscriptions:write';
+    case InvoicesRead = 'invoices:read';
+    case InvoicesWrite = 'invoices:write';
+    case MetricsRead = 'metrics:read';
 
     /**
      * @param  list<self>  $abilities

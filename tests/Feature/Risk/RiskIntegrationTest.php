@@ -31,6 +31,7 @@ beforeEach(function (): void {
 
     Redis::connection('messaging')->del('test:risk:events');
     Redis::connection('messaging')->del('test:risk:scores');
+    Redis::connection('messaging')->del('test:risk:scores:processing');
 
     $this->customer = Customer::factory()->create();
 });
@@ -38,13 +39,14 @@ beforeEach(function (): void {
 afterEach(function (): void {
     Redis::connection('messaging')->del('test:risk:events');
     Redis::connection('messaging')->del('test:risk:scores');
+    Redis::connection('messaging')->del('test:risk:scores:processing');
 });
 
 function publishFailure(Customer $customer, ?Subscription $subscription = null): void
 {
     $invoice = Invoice::factory()
         ->for($customer)
-        ->when($subscription !== null, fn ($factory) => $factory->for($subscription))
+        ->when($subscription instanceof Subscription, fn ($factory) => $factory->for($subscription))
         ->decliningAmount()
         ->create(['attempt_count' => 2]);
 
@@ -63,6 +65,18 @@ function publishFailure(Customer $customer, ?Subscription $subscription = null):
 }
 
 describe('publishing for the worker', function (): void {
+    it('preserves message identity when the same payment failure is republished', function (): void {
+        $invoice = Invoice::factory()->for($this->customer)->create();
+        $attempt = ChargeAttempt::factory()->for($invoice)->failed(PaymentFailureReason::Declined)->create();
+        $event = new PaymentFailed($invoice, $attempt, PaymentFailureReason::Declined, 1, true);
+        $publisher = app(PublishPaymentFailedForRisk::class);
+        $publisher($event);
+        $publisher($event);
+        $redis = Redis::connection('messaging');
+        $first = json_decode($redis->lpop('test:risk:events'), true, 512, JSON_THROW_ON_ERROR);
+        $second = json_decode($redis->lpop('test:risk:events'), true, 512, JSON_THROW_ON_ERROR);
+        expect($first['message_id'])->toBe($second['message_id']);
+    });
     it('puts a well-formed envelope on the list', function (): void {
         publishFailure($this->customer);
 
@@ -125,6 +139,27 @@ describe('publishing for the worker', function (): void {
 });
 
 describe('consuming the worker answers', function (): void {
+    it('keeps a claimed score recoverable when the database write fails', function (): void {
+        pushScore($this->customer->uuid, 55, 'medium');
+        $event = 'eloquent.updating: '.Customer::class;
+        Illuminate\Support\Facades\Event::listen($event, static fn () => throw new RuntimeException('database unavailable'));
+        try {
+            expect(fn () => Illuminate\Support\Facades\Artisan::call('risk:consume-scores'))->toThrow(RuntimeException::class);
+            expect(Redis::connection('messaging')->llen('test:risk:scores:processing'))->toBe(1);
+        } finally {
+            Illuminate\Support\Facades\Event::forget($event);
+        }
+        $this->artisan('risk:consume-scores')->assertSuccessful();
+        expect($this->customer->fresh()?->risk_score)->toBe(55)
+            ->and(Redis::connection('messaging')->llen('test:risk:scores:processing'))->toBe(0);
+    });
+
+    it('skips invalid customer UUIDs without stranding valid scores', function (): void {
+        pushScore('not-a-uuid', 99, 'high');
+        pushScore($this->customer->uuid, 20, 'low');
+        $this->artisan('risk:consume-scores')->assertSuccessful();
+        expect($this->customer->fresh()?->risk_score)->toBe(20);
+    });
     function pushScore(string $customerUuid, int $score, string $band): void
     {
         Redis::connection('messaging')->rpush('test:risk:scores', json_encode([

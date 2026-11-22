@@ -6,12 +6,18 @@ namespace App\Providers;
 
 use App\Services\Auth\SanctumTokenIssuer;
 use App\Services\Auth\TokenIssuer;
+use App\Services\Billing\BillingService;
+use App\Services\Billing\CheckoutGateway;
+use App\Services\Billing\CheckoutService;
 use App\Services\Billing\FakePaymentGateway;
+use App\Services\Billing\InfinitePayGateway;
 use App\Services\Billing\PaymentGateway;
 use App\Services\Pricing\CircuitBreaker;
 use App\Services\Pricing\HttpPricingClient;
 use App\Services\Pricing\NullPricingClient;
 use App\Services\Pricing\PricingClient;
+use App\Services\Subscriptions\BillingCalendar;
+use App\Services\Subscriptions\SubscriptionService;
 use App\Support\Clock;
 use App\Support\SystemClock;
 use Carbon\CarbonImmutable;
@@ -44,12 +50,20 @@ final class AppServiceProvider extends ServiceProvider
         // A `match` rather than a container alias map: an unknown value must
         // fail loudly at boot, not silently resolve to something that takes
         // real money.
-        $this->app->singleton(PaymentGateway::class, static fn (): PaymentGateway => match (config('billing.gateway')) {
-            'fake' => new FakePaymentGateway,
-            default => throw new InvalidArgumentException(
-                'Unknown payment gateway ['.get_debug_type(config('billing.gateway')).'].',
-            ),
-        });
+        $this->app->bind(PaymentGateway::class, FakePaymentGateway::class);
+        $this->app->bind(CheckoutGateway::class, InfinitePayGateway::class);
+        $this->app->bind(BillingService::class, static fn (Application $app): BillingService => new BillingService(
+            gateway: match (config('billing.gateway')) {
+                'fake' => $app->make(PaymentGateway::class),
+                'infinitepay' => $app->make(CheckoutGateway::class),
+                default => throw new InvalidArgumentException('Unknown billing gateway configuration.'),
+            },
+            pricing: $app->make(PricingClient::class),
+            subscriptions: $app->make(SubscriptionService::class),
+            clock: $app->make(Clock::class),
+            checkouts: $app->make(CheckoutService::class),
+            calendar: $app->make(BillingCalendar::class),
+        ));
 
         // Switched off, every quote is degraded — which is a real code path,
         // not a stub. A test suite that never exercises the fallback is a test
@@ -101,6 +115,7 @@ final class AppServiceProvider extends ServiceProvider
 
     private function configureRateLimiting(): void
     {
+        RateLimiter::for('infinitepay-webhooks', static fn (Request $request): Limit => Limit::perMinute(120)->by($request->ip()));
         RateLimiter::for('api', static fn (Request $request): Limit => Limit::perMinute(60)
             ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
 

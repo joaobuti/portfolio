@@ -14,13 +14,13 @@ use Illuminate\Queue\SerializesModels;
  * Distinct from a single PaymentFailed: this is the end of the road for the
  * invoice, and the point at which revenue recognition and access both change.
  */
-final class InvoiceUncollectible
+final readonly class InvoiceUncollectible
 {
     use Dispatchable;
     use SerializesModels;
 
     public function __construct(
-        public readonly Invoice $invoice,
-        public readonly int $attempts,
+        public Invoice $invoice,
+        public int $attempts,
     ) {}
 }

@@ -29,7 +29,7 @@ final class RecordSubscriptionActivity implements ShouldQueue
 {
     use InteractsWithQueue;
 
-    public $afterCommit = true;
+    public bool $afterCommit = true;
 
     public string $queue = 'observability';
 

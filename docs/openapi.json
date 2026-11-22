@@ -1,0 +1,2313 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Portfolio Billing API",
+    "version": "1.0.0",
+    "description": "Multistack project: this public API is Laravel. Pricing runs on Node/TypeScript and risk processing on Python. Hosted checkout requires server-side InfinitePay configuration. No automatic recurring debit."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/auth/tokens": {
+      "post": {
+        "operationId": "issueToken",
+        "summary": "Issue a bearer token",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IssuedToken"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Login rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requested abilities narrow the role ceiling; omitted or empty abilities use role defaults. Existing tokens do not gain newly introduced abilities.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "currentUser",
+        "summary": "Read the current user",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/tokens/current": {
+      "delete": {
+        "operationId": "revokeToken",
+        "summary": "Revoke the current bearer token",
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans": {
+      "get": {
+        "operationId": "listPlans",
+        "summary": "List active plans",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Plan"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "plans:read"
+      }
+    },
+    "/plans/{plan}": {
+      "get": {
+        "operationId": "getPlan",
+        "summary": "Read a plan by code",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Plan"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "plans:read",
+        "parameters": [
+          {
+            "name": "plan",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/subscriptions": {
+      "post": {
+        "operationId": "createSubscription",
+        "summary": "Create a subscription",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Subscription"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another active subscription already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainError"
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "subscriptions:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreSubscription"
+              }
+            }
+          }
+        },
+        "description": "Without a free trial, creates pending_payment and an immediate initial invoice for whole remaining days up to the billing boundary on day10 America/Sao_Paulo. Access begins only after initial settlement. Existing free trials remain an exception; trial end also waits for initial payment. Monthly/quarterly/yearly cadence is retained, with renewal boundaries on day10."
+      }
+    },
+    "/subscriptions/{subscription}": {
+      "get": {
+        "operationId": "getSubscription",
+        "summary": "Read an owned subscription",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Subscription"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "subscriptions:read",
+        "parameters": [
+          {
+            "name": "subscription",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "cancelSubscription",
+        "summary": "Cancel an owned subscription",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Subscription"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "subscriptions:write",
+        "parameters": [
+          {
+            "name": "subscription",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelSubscription"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/{subscription}/plan/preview": {
+      "post": {
+        "operationId": "previewPlanChange",
+        "summary": "Preview plan proration and pricing",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PlanPreview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns a stored quote_id. A valid priced quote preserves the subtotal, tax and discount for the current subscription/from/to/period and effective mode. A degraded quote remains provisional and its invoice can only be collected after automatic recalculation using current rules.",
+        "x-token-ability": "subscriptions:read",
+        "parameters": [
+          {
+            "name": "subscription",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePlan"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/{subscription}/plan": {
+      "put": {
+        "operationId": "changePlan",
+        "summary": "Change an owned subscription plan",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Subscription"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires quote_id from preview. Upgrades apply immediately with their quoted amounts and coupon/tax terms, recorded in a separate adjustment invoice. They revert after exhausted retries or the payment deadline, whichever comes first. A second change is blocked while an adjustment is pending. Consuming the same applied quote again does not create another invoice. Downgrades keep their quoted immediate/scheduled mode.",
+        "x-token-ability": "subscriptions:write",
+        "parameters": [
+          {
+            "name": "subscription",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPlanChange"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/{subscription}/invoices": {
+      "get": {
+        "operationId": "listInvoices",
+        "summary": "List owned subscription invoices",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "invoices:read",
+        "parameters": [
+          {
+            "name": "subscription",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "20 invoices per page, newest first."
+          }
+        ]
+      }
+    },
+    "/invoices/{invoice}": {
+      "get": {
+        "operationId": "getInvoice",
+        "summary": "Read an owned invoice",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "x-token-ability": "invoices:read",
+        "parameters": [
+          {
+            "name": "invoice",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/invoices/{invoice}/checkout": {
+      "post": {
+        "operationId": "createCheckout",
+        "summary": "Create or retrieve a hosted checkout intent",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unsupported amount/currency, not due, degraded or already settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Gateway disabled, missing configuration or existing hosted intent conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "60 writes per minute per caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invoice must be open, due and non-degraded. Zero totals settle locally. Positive amounts require BRL >=100 cents. One intent per invoice: unknown, failed and expired intents are never recreated automatically. 202 does not mean payment succeeded; inspect checkout.status. The URL is returned only while awaiting payment and unexpired. Already paid hosted invoices return their existing state. Default gateway fake returns 503. Adjustment links cannot outlive payment_deadline_at. Unpaid adjustment expiry reverts the upgrade; later verified payments require reconciliation.",
+        "x-token-ability": "invoices:write",
+        "parameters": [
+          {
+            "name": "invoice",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/invoices/{invoice}/payment-check": {
+      "post": {
+        "operationId": "requestPaymentVerification",
+        "summary": "Accept payment identifiers for asynchronous verification",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Token ability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "60 writes per minute per caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Maximum body 16384 bytes. Requires transaction_nsu and either invoice_slug or slug. Public notification also requires order_nsu. Monetary fields are ignored. Unknown orders receive the same acknowledgement. Payment is settled only after server-to-server payment_check. Authenticated requests derive the order from the invoice, and can retry an exhausted reconciliation signal. Read the invoice to observe final status.",
+        "x-token-ability": "invoices:write",
+        "parameters": [
+          {
+            "name": "invoice",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSignal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/infinitepay": {
+      "post": {
+        "operationId": "receiveInfinitePayNotification",
+        "summary": "Accept payment identifiers for asynchronous verification",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DomainError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "120 notifications per minute per IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Maximum body 16384 bytes. Requires transaction_nsu and either invoice_slug or slug. Public notification also requires order_nsu. Monetary fields are ignored. Unknown orders receive the same acknowledgement. Payment is settled only after server-to-server payment_check. Authenticated requests derive the order from the invoice, and can retry an exhausted reconciliation signal. Read the invoice to observe final status.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/PaymentSignal"
+                  },
+                  {
+                    "required": [
+                      "order_nsu"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "getOperationalMetrics",
+        "summary": "Read current billing operational gauges",
+        "description": "Staff only, with metrics:read. Global aggregate snapshot cached for15seconds, without customer/order/merchant identifiers. Fixed status labels; timestamps and ages use seconds. This is read-only operational monitoring, not a financial report or recurring debit metric. Database/cache failure fails the scrape rather than returning fabricated zeros.",
+        "x-token-ability": "metrics:read",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition0.0.4; all metrics are current-state gauges, including snapshot timestamp.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Response must not be stored by clients/proxies; internal snapshot cache is15seconds.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store, private"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "# HELP portfolio_billing_invoices Persisted invoices by current status.\n# TYPE portfolio_billing_invoices gauge\nportfolio_billing_invoices{status=\"open\"} 0\n"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token"
+          },
+          "403": {
+            "description": "Caller lacks metrics:read or staff capability"
+          },
+          "429": {
+            "description": "API rate limit"
+          },
+          "500": {
+            "description": "Metrics collection or infrastructure failure; scrape fails"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Sanctum token; x-token-ability identifies the required ability, additionally constrained by ownership."
+      }
+    },
+    "schemas": {
+      "Money": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "BRL",
+              "USD",
+              "EUR"
+            ]
+          },
+          "formatted": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "formatted"
+        ]
+      },
+      "Checkout": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "creating",
+              "awaiting_payment",
+              "creation_unknown",
+              "creation_failed",
+              "paid",
+              "expired"
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "url",
+          "expires_at"
+        ]
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "paid",
+              "uncollectible",
+              "void"
+            ]
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "discount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "period": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "end": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ]
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pricing_degraded": {
+            "type": "boolean"
+          },
+          "checkout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Checkout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "renewal",
+              "adjustment"
+            ]
+          },
+          "payment_deadline_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "subtotal",
+          "discount",
+          "tax",
+          "total",
+          "period",
+          "due_at",
+          "paid_at",
+          "pricing_degraded",
+          "checkout",
+          "kind",
+          "payment_deadline_at"
+        ]
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "interval": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "enum": [
+                  "monthly",
+                  "quarterly",
+                  "yearly"
+                ]
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "label"
+            ]
+          },
+          "trial_days": {
+            "type": "integer"
+          },
+          "features": {
+            "type": [
+              "object",
+              "array"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "description",
+          "price",
+          "interval",
+          "trial_days",
+          "features"
+        ]
+      },
+      "SubscriptionChange": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "label"
+            ]
+          },
+          "from_plan": {
+            "type": "string"
+          },
+          "to_plan": {
+            "type": "string"
+          },
+          "proration_amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "period": {
+            "type": "object",
+            "properties": {
+              "days_total": {
+                "type": "integer"
+              },
+              "days_remaining": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "days_total",
+              "days_remaining"
+            ]
+          },
+          "effective_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payment_status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "pending",
+              "paid",
+              "reverted",
+              null
+            ]
+          },
+          "reverted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "type",
+          "proration_amount",
+          "period",
+          "effective_at",
+          "requested_at"
+        ]
+      },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "enum": [
+                  "pending_payment",
+                  "trialing",
+                  "active",
+                  "past_due",
+                  "canceled",
+                  "expired"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "grants_access": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "value",
+              "label",
+              "grants_access"
+            ]
+          },
+          "plan": {
+            "$ref": "#/components/schemas/Plan"
+          },
+          "pending_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Plan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trial_ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_period": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ]
+          },
+          "cancel_at_period_end": {
+            "type": "boolean"
+          },
+          "canceled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionChange"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "plan",
+          "trial_ends_at",
+          "current_period",
+          "cancel_at_period_end",
+          "canceled_at",
+          "ended_at"
+        ]
+      },
+      "PriceQuote": {
+        "type": "object",
+        "properties": {
+          "subtotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "discount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "taxable": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tax_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                }
+              },
+              "required": [
+                "type",
+                "code",
+                "description",
+                "amount"
+              ]
+            }
+          },
+          "coupon": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "applied": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "message": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "applied",
+                  "reason",
+                  "message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "degraded": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "subtotal",
+          "discount",
+          "taxable",
+          "tax",
+          "total",
+          "tax_region",
+          "lines",
+          "coupon",
+          "degraded"
+        ]
+      },
+      "PlanPreview": {
+        "type": "object",
+        "properties": {
+          "amount_due": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "credit_from_current_plan": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "charge_for_new_plan": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "period": {
+            "type": "object",
+            "properties": {
+              "days_total": {
+                "type": "integer"
+              },
+              "days_remaining": {
+                "type": "integer"
+              },
+              "remaining_percentage": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "days_total",
+              "days_remaining",
+              "remaining_percentage"
+            ]
+          },
+          "is_charge": {
+            "type": "boolean"
+          },
+          "is_credit": {
+            "type": "boolean"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/PriceQuote"
+          },
+          "chargeable": {
+            "type": "boolean"
+          },
+          "quote_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "amount_due",
+          "credit_from_current_plan",
+          "charge_for_new_plan",
+          "period",
+          "is_charge",
+          "is_credit",
+          "pricing",
+          "chargeable",
+          "quote_id"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "staff"
+            ]
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "uuid": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "uuid",
+                  "name"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "email",
+          "role",
+          "customer",
+          "abilities",
+          "last_login_at"
+        ]
+      },
+      "IssuedToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "token_type",
+          "abilities",
+          "expires_at"
+        ]
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "password": {
+            "type": "string"
+          },
+          "token_name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "plans:read",
+                "subscriptions:read",
+                "subscriptions:write",
+                "invoices:read",
+                "invoices:write",
+                "metrics:read"
+              ]
+            }
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "StoreSubscription": {
+        "type": "object",
+        "properties": {
+          "customer": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "with_trial": {
+            "type": "boolean",
+            "default": true
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "customer",
+          "plan"
+        ]
+      },
+      "ChangePlan": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string"
+          },
+          "apply_immediately": {
+            "type": "boolean",
+            "default": false
+          },
+          "coupon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quote_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "plan"
+        ]
+      },
+      "CancelSubscription": {
+        "type": "object",
+        "properties": {
+          "immediately": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": []
+      },
+      "PaymentSignal": {
+        "type": "object",
+        "properties": {
+          "order_nsu": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "transaction_nsu": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "invoice_slug": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "slug": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "transaction_nsu"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "invoice_slug"
+            ]
+          },
+          {
+            "required": [
+              "slug"
+            ]
+          }
+        ]
+      },
+      "Accepted": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "accepted"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "DomainError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "context": {
+                "type": [
+                  "object",
+                  "array"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "context"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "message",
+          "errors"
+        ]
+      },
+      "HttpError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "InvoicePage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Invoice"
+            }
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "first": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "last": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "prev": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "next": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "first",
+              "last",
+              "prev",
+              "next"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "current_page": {
+                "type": "integer"
+              },
+              "from": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "last_page": {
+                "type": "integer"
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "active": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "label",
+                    "active"
+                  ]
+                }
+              },
+              "path": {
+                "type": "string"
+              },
+              "per_page": {
+                "type": "integer"
+              },
+              "to": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "current_page",
+              "from",
+              "last_page",
+              "links",
+              "path",
+              "per_page",
+              "to",
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ]
+      },
+      "ConfirmPlanChange": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChangePlan"
+          },
+          {
+            "required": [
+              "quote_id"
+            ]
+          }
+        ],
+        "description": "Pass the quote_id returned by preview to preserve the complete prorated subtotal, tax, discount and mode. Quotes are bound to subscription, from/to plans and current period; a consumed quote cannot apply twice."
+      }
+    }
+  }
+}

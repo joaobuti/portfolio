@@ -35,19 +35,26 @@ it('exposes prices as an integer and a formatted string', function (): void {
         ->assertJsonPath('data.price.formatted', 'R$ 1.234,56');
 });
 
-it('serves the catalogue from cache on the second call', function (): void {
+it('serves the catalogue from cache on the second call', function (string $store): void {
+    config()->set('cache.default', $store);
     Cache::forget(PlanCatalog::CACHE_KEY);
     Plan::factory()->create(['code' => 'basic']);
 
-    $this->getJson('/api/v1/plans')->assertOk();
+    $this->getJson('/api/v1/plans')->assertOk()->assertJsonPath('data.0.code', 'basic');
 
     DB::enableQueryLog();
-    $this->getJson('/api/v1/plans')->assertOk();
+    $this->getJson('/api/v1/plans')->assertOk()->assertJsonPath('data.0.code', 'basic');
 
-    expect(DB::getQueryLog())->toBeEmpty();
-});
+    $planQueries = array_filter(
+        DB::getQueryLog(),
+        static fn (array $query): bool => str_contains($query['query'], '"plans"'),
+    );
+    expect($planQueries)->toBeEmpty()
+        ->and(config('cache.serializable_classes'))->toBeFalse();
+})->with(['array', 'database']);
 
-it('invalidates the cache the moment a plan changes', function (): void {
+it('invalidates the cache the moment a plan changes', function (string $store): void {
+    config()->set('cache.default', $store);
     $plan = Plan::factory()->priced('29.90')->create(['code' => 'basic']);
 
     $this->getJson('/api/v1/plans')->assertJsonPath('data.0.price.amount', 2990);
@@ -56,7 +63,7 @@ it('invalidates the cache the moment a plan changes', function (): void {
     $plan->update(['amount' => App\Support\Money::ofMajor('39.90', App\Enums\Currency::BRL)]);
 
     $this->getJson('/api/v1/plans')->assertJsonPath('data.0.price.amount', 3990);
-});
+})->with(['array', 'database']);
 
 it('404s an unknown plan code', function (): void {
     $this->getJson('/api/v1/plans/nope')->assertNotFound();

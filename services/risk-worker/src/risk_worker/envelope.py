@@ -45,7 +45,7 @@ def parse(raw: str | bytes) -> PaymentFailedEvent:
 
     try:
         payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
         raise MalformedMessage(f"payload is not valid JSON: {exc}") from exc
 
     if not isinstance(payload, dict):
@@ -71,7 +71,7 @@ def parse(raw: str | bytes) -> PaymentFailedEvent:
         currency=_require_str(data, "currency"),
         reason=_require_str(data, "reason"),
         attempt_number=_require_int(data, "attempt_number"),
-        will_retry=bool(data.get("will_retry", False)),
+        will_retry=_require_bool(data, "will_retry"),
     )
 
 
@@ -94,4 +94,11 @@ def _require_int(source: dict[str, object], key: str) -> int:
     # somewhere upstream, and coercing it here would launder that bug.
     if isinstance(value, bool) or not isinstance(value, int):
         raise MalformedMessage(f"[{key}] must be an integer")
+    return value
+
+
+def _require_bool(source: dict[str, object], key: str) -> bool:
+    value = source.get(key)
+    if not isinstance(value, bool):
+        raise MalformedMessage(f"[{key}] must be a boolean")
     return value

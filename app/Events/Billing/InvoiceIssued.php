@@ -14,10 +14,10 @@ use Illuminate\Queue\SerializesModels;
  * Fired inside the same transaction boundary that created it, so a listener
  * can never see an invoice that was rolled back.
  */
-final class InvoiceIssued
+final readonly class InvoiceIssued
 {
     use Dispatchable;
     use SerializesModels;
 
-    public function __construct(public readonly Invoice $invoice) {}
+    public function __construct(public Invoice $invoice) {}
 }

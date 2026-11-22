@@ -1,4 +1,4 @@
-import { applyRate, clamp } from './money.js';
+import { applyRate, clamp, toSafeNumber } from './money.js';
 import { type Coupon, type Currency, findCoupon, findTaxRule } from './rules.js';
 
 /** Basis points in one whole. 10000 bp = 100%. */
@@ -98,7 +98,7 @@ export function quote(request: QuoteRequest): Quote {
     discountMinorUnits: discount,
     taxableMinorUnits: taxable,
     taxMinorUnits: tax,
-    totalMinorUnits: taxable + tax,
+    totalMinorUnits: toSafeNumber(BigInt(taxable) + BigInt(tax)),
     lines,
     coupon: outcome,
     taxRegion: taxRule?.code ?? null,
