@@ -170,9 +170,19 @@ volumes.** Port overrides and complete setup instructions are in the
 | [Development and publishing](docs/DEVELOPMENT.md) | Configuration, scheduled work, container startup and dual GitLab/GitHub pushes |
 | [Operations](docs/OPERATIONS.md) | Local HTTPS webhooks, checkout recovery and Prometheus metrics |
 | [OpenAPI](docs/openapi.json) | Request/response schemas and security requirements |
+| [AI remediation design](docs/AI_REMEDIATION.md) | Approved architecture for incident triage, tested fixes and reviewed GitLab Merge Requests; implementation pending |
 
-Next planned work: a React/TypeScript dashboard using a client generated from
-the OpenAPI contract. Its implementation and acceptance criteria are pending.
+## Planned work
+
+- **AI-assisted incident remediation:** an approved design for detecting errors,
+  reproducing code defects in isolation and opening tested GitLab Merge Requests.
+  Human review controls merging and deployment; approved changes then synchronize
+  to GitHub. The first milestone is a controlled demonstration. No remediation
+  agent or continuous monitor is implemented yet.
+  [Architecture, safeguards and acceptance criteria](docs/AI_REMEDIATION.md) ·
+  [ADR-0012](docs/adr/0012-ai-assisted-incident-remediation.md).
+- **React/TypeScript dashboard:** a client generated from the OpenAPI contract.
+  Its implementation and acceptance criteria are pending.
 
 ## License
 

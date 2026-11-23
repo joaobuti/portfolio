@@ -3,6 +3,10 @@
 Reviewed against the repository on 2026-11-22. This is an implementation
 inventory, not evidence that the current CI pipeline passed.
 
+Planning update on 2026-11-23: the owner approved the AI remediation architecture
+in ADR-0012. Only its documentation is delivered; runtime implementation and
+continuous monitoring remain pending.
+
 ## Implemented
 
 | Area | Delivered | Evidence |
@@ -32,6 +36,16 @@ calendar examples, quote confirmation, deadlines and deployment considerations.
 
 ## Planned work
 
+- AI-assisted incident remediation, approved on 2026-11-23: a separate service
+  captures sanitized errors, groups incidents, reproduces code defects and
+  prepares tested corrections as GitLab Merge Requests. Human review controls
+  merges/deployment, followed by explicit GitHub synchronization. The first
+  milestone is a controlled synthetic demonstration, before continuous monitoring.
+  See [ADR-0012](adr/0012-ai-assisted-incident-remediation.md) and the
+  [workflow, limits and acceptance criteria](AI_REMEDIATION.md). No collector,
+  coding agent, publisher or synchronization worker is implemented by this
+  documentation delivery; providers, budgets, hosting and credentials remain
+  activation/implementation configuration.
 - React dashboard with a generated client, dependent on OpenAPI.
 
 The dashboard has no implementation or acceptance criteria yet and is not

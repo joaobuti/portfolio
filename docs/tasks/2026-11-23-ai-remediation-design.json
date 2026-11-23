@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-23-ai-remediation-design",
+  "phase": "verified",
+  "scope": "Document user-approved AI incident remediation architecture only. No runtime code, credentials, deployments or monitoring activation.",
+  "requirements": [
+    {
+      "id": "AI-DOC-001",
+      "text": "Document approved monitoring, classification, isolated reproduction, correction and MR workflow",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "ADR-0012; AI_REMEDIATION workflow, input lifecycle and A1-A5",
+      "evidence": [
+        "docs/AI_REMEDIATION.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "AI-DOC-002",
+      "text": "Document autonomy limits, human review, synthetic data, sanitization, untrusted inputs and budgets",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "ADR-0012 decisions 4,6,7,8; execution policy and A2,A6,A7",
+      "evidence": [
+        "docs/adr/0012-ai-assisted-incident-remediation.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "AI-DOC-003",
+      "text": "Keep GitLab MR/CI canonical and synchronize approved changes to public GitHub explicitly",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Publication section and A8; no duplicate requests or force-push",
+      "evidence": [
+        "docs/AI_REMEDIATION.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "AI-DOC-004",
+      "text": "Start with controlled demonstration before continuous monitoring",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Objective, lifecycle, A1-A9, evaluation and activation configuration",
+      "evidence": [
+        "docs/AI_REMEDIATION.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "AI-DOC-005",
+      "text": "Preserve recruiter orientation and distinguish approved design from delivered implementation",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Concise planned-work section and status planning update; providers/hosting/budget values remain pending",
+      "evidence": [
+        "README.md; docs/STATUS.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "AI-DOC-006",
+      "text": "Validate and independently review documentation before publishing to both remotes",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Documentation links, anchors, JSON, fenced blocks, diff and dual-push access checked; independent review approved before publication",
+      "evidence": [
+        "46 local links and 3 heading anchors passed",
+        "Independent reviewer: no actionable findings",
+        "git diff --check passed",
+        "Dual-remote push dry-run passed"
+      ],
+      "pending": null,
+      "reason": null
+    }
+  ],
+  "spec": {
+    "inputs": "Owner-approved architecture and current repository/CI/dual publication state",
+    "outputs": [
+      "ADR-0012",
+      "AI_REMEDIATION.md",
+      "README planned-work summary",
+      "STATUS planning update"
+    ],
+    "acceptance": "All approved decisions documented with planned status, failure boundaries and demo criteria; documentation links valid; independent review; both main refs equal after publication",
+    "unresolved": "Provider, model, deployment hosting, credential configuration, numeric limits and retention remain explicit implementation/activation choices; no approval inferred"
+  },
+  "validation": [
+    {
+      "check": "Local Markdown links and heading anchors",
+      "result": "passed",
+      "files": [
+        "README.md",
+        "docs/STATUS.md",
+        "docs/AI_REMEDIATION.md",
+        "docs/adr/0012-ai-assisted-incident-remediation.md"
+      ],
+      "links": 46,
+      "anchors": 3
+    },
+    {
+      "check": "Fenced block balance and JSON parse",
+      "result": "passed"
+    },
+    {
+      "check": "Runtime tests",
+      "result": "not run; documentation-only change, no runtime behavior claimed"
+    },
+    {
+      "check": "git diff --check",
+      "result": "passed"
+    },
+    {
+      "check": "git push --dry-run origin main",
+      "result": "passed for GitLab and GitHub"
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "independent review agent",
+      "result": "No actionable omissions or contradictions; all approved decisions covered; planned status and pending configuration consistent",
+      "scope": "Entire requirement ledger, README/STATUS diff, ADR-0012 and AI_REMEDIATION.md"
+    }
+  ],
+  "publicationNote": "This record validates the documentation delivery. After committing, publication is verified by comparing local HEAD with both remote main refs; final commit/ref evidence is stored outside this self-referencing commit."
+}
