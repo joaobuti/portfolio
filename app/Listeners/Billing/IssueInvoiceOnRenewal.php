@@ -41,8 +41,16 @@ final class IssueInvoiceOnRenewal implements ShouldQueue
 
     public function __construct(private readonly BillingService $billing) {}
 
+    public function shouldQueue(SubscriptionRenewed $event): bool
+    {
+        return $event->subscription->customer()->whereNull('demo_workspace_id')->exists();
+    }
+
     public function __invoke(SubscriptionRenewed $event): void
     {
+        if ($event->subscription->customer()->whereNotNull('demo_workspace_id')->exists()) {
+            return;
+        }
         $invoice = $this->billing->issueForPeriod($event->subscription, $event->period, $event->firstPayment);
 
         if (! $invoice->isChargeable()) {

@@ -54,7 +54,7 @@ final class CollectDueInvoicesCommand extends Command
 
         $queued = 0;
 
-        Invoice::query()
+        Invoice::query()->automated()
             ->dueForCollection($asOf)
             ->orderBy('id')
             ->lazyById()

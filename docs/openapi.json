@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Portfolio Billing API",
-    "version": "1.0.0",
-    "description": "Multistack project: this public API is Laravel. Pricing runs on Node/TypeScript and risk processing on Python. Hosted checkout requires server-side InfinitePay configuration. No automatic recurring debit."
+    "version": "1.1.0",
+    "description": "Multistack project: this public API is Laravel. Pricing runs on Node/TypeScript and risk processing on Python. Hosted checkout requires server-side InfinitePay configuration. No automatic recurring debit. Dashboard sessions use HttpOnly cookies and CSRF; integration bearer tokens retain scopes. Demo endpoints require a dedicated APP_ENV=demo environment and simulated payments."
   },
   "servers": [
     {
@@ -13,6 +13,9 @@
   "security": [
     {
       "bearerAuth": []
+    },
+    {
+      "cookieAuth": []
     }
   ],
   "paths": {
@@ -165,7 +168,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/plans": {
@@ -286,6 +294,95 @@
       }
     },
     "/subscriptions": {
+      "get": {
+        "operationId": "discoverSubscriptions",
+        "summary": "Discover authorized current and historical subscriptions",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "description": "20 records per page."
+          }
+        ],
+        "x-token-ability": "subscriptions:read"
+      },
       "post": {
         "operationId": "createSubscription",
         "summary": "Create a subscription",
@@ -367,7 +464,8 @@
             }
           }
         },
-        "description": "Without a free trial, creates pending_payment and an immediate initial invoice for whole remaining days up to the billing boundary on day10 America/Sao_Paulo. Access begins only after initial settlement. Existing free trials remain an exception; trial end also waits for initial payment. Monthly/quarterly/yearly cadence is retained, with renewal boundaries on day10."
+        "description": "Without a free trial, creates pending_payment and an immediate initial invoice for whole remaining days up to the billing boundary on day10 America/Sao_Paulo. Access begins only after initial settlement. Existing free trials remain an exception; trial end also waits for initial payment. Monthly/quarterly/yearly cadence is retained, with renewal boundaries on day10.",
+        "x-cookie-csrf": true
       }
     },
     "/subscriptions/{subscription}": {
@@ -528,7 +626,8 @@
               }
             }
           }
-        }
+        },
+        "x-cookie-csrf": true
       }
     },
     "/subscriptions/{subscription}/plan/preview": {
@@ -624,7 +723,8 @@
               }
             }
           }
-        }
+        },
+        "x-cookie-csrf": true
       }
     },
     "/subscriptions/{subscription}/plan": {
@@ -720,7 +820,8 @@
               }
             }
           }
-        }
+        },
+        "x-cookie-csrf": true
       }
     },
     "/subscriptions/{subscription}/invoices": {
@@ -956,7 +1057,8 @@
               "format": "uuid"
             }
           }
-        ]
+        ],
+        "x-cookie-csrf": true
       }
     },
     "/invoices/{invoice}/payment-check": {
@@ -1064,7 +1166,8 @@
               }
             }
           }
-        }
+        },
+        "x-cookie-csrf": true
       }
     },
     "/webhooks/infinitepay": {
@@ -1182,7 +1285,1020 @@
           "500": {
             "description": "Metrics collection or infrastructure failure; scrape fails"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/csrf": {
+      "get": {
+        "operationId": "initializeBrowserSession",
+        "summary": "Initialize anonymous session and XSRF-TOKEN cookie",
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/session": {
+      "post": {
+        "operationId": "loginBrowserSession",
+        "summary": "Log in with rotated HttpOnly session and CSRF token",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserLogin"
+              }
+            }
+          }
+        },
+        "x-cookie-csrf": true
+      },
+      "delete": {
+        "operationId": "logoutBrowserSession",
+        "summary": "Invalidate browser session and rotate CSRF token (idempotent)",
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-cookie-csrf": true
+      }
+    },
+    "/customers": {
+      "get": {
+        "operationId": "searchCustomers",
+        "summary": "Read-only staff customer search",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "description": "20 records per page."
+          }
+        ],
+        "x-token-ability": "customers:read"
+      }
+    },
+    "/customers/{customer}": {
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Read-only staff customer detail",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Customer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "customer",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "x-token-ability": "customers:read"
+      }
+    },
+    "/customers/{customer}/subscriptions": {
+      "get": {
+        "operationId": "listCustomerSubscriptions",
+        "summary": "Read-only staff subscriptions for an authorized customer",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "customer",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "description": "20 records per page."
+          }
+        ],
+        "x-token-abilities": [
+          "customers:read",
+          "subscriptions:read"
+        ]
+      }
+    },
+    "/invoices": {
+      "get": {
+        "operationId": "discoverInvoices",
+        "summary": "Paginated authorized invoice inquiry with customer context",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "description": "20 records per page."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "paid",
+                "uncollectible",
+                "void"
+              ]
+            }
+          },
+          {
+            "name": "customer",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "x-token-ability": "invoices:read"
+      }
+    },
+    "/demo/session": {
+      "post": {
+        "operationId": "startOrResetDemo",
+        "summary": "Create a visitor sandbox; retire its previous generation if present",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoIdentity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unsafe demo configuration or non-dedicated database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoEntry"
+              }
+            }
+          }
+        },
+        "x-cookie-csrf": true,
+        "description": "Demo only: no caller-supplied workspace or customer ID. At capacity returns 429 without retiring the current generation. Requires CSRF-initialized anonymous browser session. 503 for unsafe/mixed deployment."
+      }
+    },
+    "/demo/profile": {
+      "post": {
+        "operationId": "switchDemoProfile",
+        "summary": "Switch profile inside the current live visitor sandbox",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoIdentity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unsafe demo configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "staff"
+                    ]
+                  }
+                },
+                "required": [
+                  "profile"
+                ]
+              }
+            }
+          }
+        },
+        "x-cookie-csrf": true
+      }
+    },
+    "/demo/invoices/{invoice}/payment": {
+      "post": {
+        "operationId": "simulateInvoicePayment",
+        "summary": "Simulate an eligible owned invoice payment, never a real checkout",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Effective capability or ownership refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or demo disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Missing/stale CSRF token for browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation or business rule rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate or demo capacity limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unsafe demo configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "declined",
+                      "pending"
+                    ]
+                  }
+                },
+                "required": [
+                  "outcome"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "invoice",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "x-token-ability": "invoices:write",
+        "x-cookie-csrf": true,
+        "description": "Customer session in a live demo sandbox only. Pending does not settle. Decline retains persisted retry schedule; reset demo to immediately replay. Paid invoices are not charged again."
       }
     }
   },
@@ -1192,6 +2308,12 @@
         "type": "http",
         "scheme": "bearer",
         "description": "Sanctum token; x-token-ability identifies the required ability, additionally constrained by ownership."
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "portfolio_billing_session",
+        "description": "First-party same-origin session. Cookie name configurable with SESSION_COOKIE. Initialize GET /auth/csrf; send credentials and URL-decoded XSRF-TOKEN as X-XSRF-TOKEN on mutations. Login/profile changes rotate it. Staff browser sessions are read-only."
       }
     },
     "schemas": {
@@ -1361,6 +2483,25 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/Customer"
+          },
+          "simulation": {
+            "type": "object",
+            "properties": {
+              "payment_status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "declined",
+                  "approved"
+                ]
+              }
+            },
+            "required": [
+              "payment_status"
+            ]
           }
         },
         "required": [
@@ -1632,6 +2773,17 @@
             "items": {
               "$ref": "#/components/schemas/SubscriptionChange"
             }
+          },
+          "next_charge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextCharge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base recurring subtotal for the current/scheduled plan, excluding future pricing adjustments. Null when no renewable charge is scheduled, including initial pending payment and cancellation."
           }
         },
         "required": [
@@ -1956,7 +3108,8 @@
                 "subscriptions:write",
                 "invoices:read",
                 "invoices:write",
-                "metrics:read"
+                "metrics:read",
+                "customers:read"
               ]
             }
           }
@@ -2307,6 +3460,184 @@
           }
         ],
         "description": "Pass the quote_id returned by preview to preserve the complete prorated subtotal, tax, discount and mode. Quotes are bound to subscription, from/to plans and current period; a consumed quote cannot apply twice."
+      },
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email"
+        ]
+      },
+      "NextCharge": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "estimated": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "at",
+          "plan",
+          "subtotal",
+          "estimated"
+        ]
+      },
+      "CustomerPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Customer"
+            }
+          },
+          "links": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ]
+      },
+      "SubscriptionPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subscription"
+            }
+          },
+          "links": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ]
+      },
+      "DemoIdentity": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/User"
+          },
+          "demo": {
+            "type": "object",
+            "properties": {
+              "workspace": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scenario": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "pending",
+                  "change"
+                ]
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "simulated": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "workspace",
+              "scenario",
+              "expires_at",
+              "simulated"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "demo"
+        ]
+      },
+      "BrowserLogin": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "DemoEntry": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "staff"
+            ]
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "active",
+              "pending",
+              "change"
+            ]
+          }
+        },
+        "required": [
+          "profile",
+          "scenario"
+        ]
       }
     }
   }

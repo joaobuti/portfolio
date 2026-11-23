@@ -10,6 +10,11 @@ use App\Console\Commands\RepriceDegradedInvoicesCommand;
 use App\Console\Commands\VerifyPendingCheckoutsCommand;
 use Illuminate\Support\Facades\Schedule;
 
+if (config('demo.enabled') === true) {
+    Schedule::command(App\Console\Commands\PruneDemoWorkspacesCommand::class)
+        ->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+}
+
 /*
 |--------------------------------------------------------------------------
 | Scheduled work

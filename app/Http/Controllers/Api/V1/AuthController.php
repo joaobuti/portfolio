@@ -41,6 +41,7 @@ final class AuthController extends Controller
      */
     public function store(LoginRequest $request): JsonResponse
     {
+        abort_if(config('demo.enabled') === true || \Illuminate\Support\Facades\Auth::guard('web')->check(), 403);
         $token = $this->authentication->authenticate(new LoginData(
             email: $request->string('email')->toString(),
             password: $request->string('password')->toString(),
@@ -75,6 +76,7 @@ final class AuthController extends Controller
      */
     public function destroy(Request $request): Response
     {
+        abort_if(app(\App\Services\Auth\EffectiveAbilities::class)->isSession($this->currentUser($request)), 403);
         $this->tokens->revokeCurrent($this->currentUser($request));
 
         return response()->noContent();

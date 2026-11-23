@@ -1,13 +1,15 @@
 # Customer and operations dashboard
 
-Status: decisions accepted on **2026-11-23**; low-fidelity wireframes reviewed;
-implementation pending. This specification consolidates the owner's selections.
+Status: decisions accepted on **2026-11-23**; low-fidelity wireframes reviewed.
+Backend sessions, read APIs and isolated demo APIs are implemented; the React
+application, final visual design and public deployment remain pending.
+This specification consolidates the owner's selections.
 [ADR-0013](adr/0013-customer-and-operations-dashboard.md) records the architecture
 and the planned change to browser authentication. The dashboard is prioritized
 before the separately approved [AI remediation design](AI_REMEDIATION.md).
 
-No frontend application, new endpoint, session authentication, public demo or
-deployment is delivered by this documentation. The conversational wireframes
+See the [backend integration guide](DASHBOARD_BACKEND.md) for the implemented
+contracts and local isolated API demo. The conversational wireframes
 illustrate layout and local state transitions; their prices, plan features,
 invoice identifiers and customer records are fictional, not a product catalogue.
 
@@ -147,27 +149,25 @@ capabilities: internal sessions are read-only, customer sessions retain
 ownership and authorized self-service actions. Return enough identity and
 capability information for navigation without treating hidden UI as protection.
 
-The existing `staff` role and policies can act across customers, and its default
-token abilities include writes. Implement the approved read-only browser-session
-boundary explicitly; choosing a role/capability mapping is implementation work,
-not a claim that current staff authorization already satisfies this design.
-Update the current-user resource so cookie sessions do not depend on a persisted
-personal access token's fields.
+The existing `staff` integration role can act across ordinary customers with its
+granted token scopes. Browser staff sessions now have a separate effective
+read-only ceiling, enforced on direct API requests as well as reflected by the
+identity resource. Cookie identity no longer requires a persisted access token.
 
 ## Backend dependencies
 
 | Need | Current position | Required implementation |
 | --- | --- | --- |
-| Normal browser login/logout and identity | API token issuance/revocation exists; SPA session path is deliberately not enabled | Stateful session/CSRF lifecycle and session-compatible identity/capabilities |
-| Discover customer subscriptions | Read-by-UUID exists; identity does not discover subscriptions | Authorized current/history lookup and no-subscription outcome |
-| Internal customer inquiry | No customer list/search API | Bounded search, pagination, customer detail and associated subscriptions |
-| Internal general invoice inquiry | Invoice detail and per-subscription list exist | Customer-aware general list/filter endpoint with read-only authorization |
-| Upcoming charge and scheduled changes | Subscription data exists but not a complete dashboard summary | Confirm contract for authoritative next amount/date, scheduled plan and action eligibility |
-| Public demo | Shared local seeds and fake gateway exist | Per-visitor provisioning/isolation, prepared scenarios, safe reset/expiry and simulated payment transitions |
+| Normal browser login/logout and identity | Implemented in `/auth/session`, `/auth/csrf` and session-aware `/auth/me` | Configure trusted same-origin host and secure HTTPS cookies for deployment |
+| Discover customer subscriptions | Implemented paginated `/subscriptions`, including empty state | Connect frontend and clear identity-scoped caches on session changes |
+| Internal customer inquiry | Implemented customer search/detail and associated subscriptions | Build the read-only frontend views |
+| Internal general invoice inquiry | Implemented authorized general invoice list/filter with customer context | Build list, pagination and detail views |
+| Upcoming charge and scheduled changes | Implemented `next_charge` with scheduled target and estimated base subtotal | Label estimates honestly; exact confirmation still uses the quote |
+| Public demo | Implemented isolated workspace/profile/scenario/reset/payment APIs and dedicated local Compose | Frontend, public HTTPS hosting and activation remain pending |
 
-These are required capabilities, not approved new endpoint names. Review the
-read/write authorization matrix and update OpenAPI before frontend integration.
-The existing contract still has 16 operations; this documentation adds none.
+The current [OpenAPI contract](openapi.json) covers 27 operations, including the
+new endpoints. The backend guide defines session/capability semantics and demo
+limits. Frontend generation/integration remains a separate implementation step.
 
 ## Isolated demo lifecycle
 
@@ -213,12 +213,12 @@ approval:
 ## Remaining definition work
 
 - Final screen content and appearance beyond the reviewed low-fidelity layout.
-- Complete API schemas, error/eligibility contracts and browser capability mapping.
-- Demo storage/isolation strategy, lifecycle limits and deployment configuration.
+- Frontend integration with the implemented schemas/capabilities and any further action-eligibility UX refinements.
+- Public demo hosting/deployment; isolation uses workspace generations and configurable TTL/cap limits documented in the backend guide.
 - Dependency/tool versions, generator, i18n/forms/testing choices and build layout.
 - Accessibility target, responsive breakpoints, session timing and confirmation-refresh limits.
 
 Registration and other exclusions do not become implied backlog items. Financial
-rules continue to follow ADR-0011; browser authentication follows ADR-0013 once
-implemented. This specification is the handoff for implementation, not its
-completion report.
+rules continue to follow ADR-0011; browser authentication follows ADR-0013.
+The backend guide and delivery record provide backend evidence; this document
+is not a claim that the complete frontend or hosted demo is delivered.

@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 use App\Enums\TokenAbility;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InfinitePayWebhookController;
 use App\Http\Controllers\Api\V1\InvoiceCheckoutController;
 use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\InvoicePaymentCheckController;
 use App\Http\Controllers\Api\V1\MetricsController;
 use App\Http\Controllers\Api\V1\PlanController;
+use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\SubscriptionController;
 use App\Http\Controllers\Api\V1\SubscriptionPlanController;
+use App\Http\Middleware\DashboardAccess;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,6 +38,15 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->as('api.v1.')->group(function (): void {
 
+    Route::post('demo/session', [App\Http\Controllers\Api\V1\DemoController::class, 'store'])
+        ->middleware(['web', 'throttle:demo'])->block(10, 10)->name('demo.session');
+    Route::post('demo/profile', [App\Http\Controllers\Api\V1\DemoController::class, 'profile'])
+        ->middleware(['web', 'throttle:demo'])->block(10, 10)->name('demo.profile');
+
+    Route::post('auth/session', [SessionController::class, 'store'])->middleware(['web', 'throttle:login'])->name('session.store');
+    Route::get('auth/csrf', [SessionController::class, 'csrf'])->middleware('web')->name('session.csrf');
+    Route::delete('auth/session', [SessionController::class, 'destroy'])->middleware('web')->name('session.destroy');
+
     Route::post('webhooks/infinitepay', InfinitePayWebhookController::class)
         ->middleware('throttle:infinitepay-webhooks')->name('webhooks.infinitepay');
 
@@ -45,7 +57,19 @@ Route::prefix('v1')->as('api.v1.')->group(function (): void {
         ->middleware('throttle:login')
         ->name('auth.tokens.store');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', DashboardAccess::class, 'throttle:api'])->group(function (): void {
+        Route::post('demo/invoices/{invoice}/payment', App\Http\Controllers\Api\V1\DemoPaymentController::class)
+            ->middleware(['abilities:'.TokenAbility::InvoicesWrite->value, 'throttle:api'])->name('demo.payment');
+        Route::get('subscriptions', [DashboardController::class, 'subscriptions'])
+            ->middleware('abilities:'.TokenAbility::SubscriptionsRead->value)->name('subscriptions.index');
+        Route::middleware('abilities:'.TokenAbility::CustomersRead->value)->group(function (): void {
+            Route::get('customers', [DashboardController::class, 'customers'])->name('customers.index');
+            Route::get('customers/{customer}', [DashboardController::class, 'customer'])->name('customers.show');
+            Route::get('customers/{customer}/subscriptions', [DashboardController::class, 'customerSubscriptions'])
+                ->middleware('abilities:'.TokenAbility::SubscriptionsRead->value)->name('customers.subscriptions');
+        });
+        Route::get('invoices', [DashboardController::class, 'invoices'])
+            ->middleware('abilities:'.TokenAbility::InvoicesRead->value)->name('invoices.all');
         Route::get('metrics', MetricsController::class)
             ->middleware(['abilities:'.TokenAbility::MetricsRead->value, 'throttle:api'])->name('metrics');
         Route::middleware('abilities:'.TokenAbility::InvoicesRead->value)->group(function (): void {

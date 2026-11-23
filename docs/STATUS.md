@@ -9,14 +9,16 @@ continuous monitoring remain pending.
 
 Dashboard planning update on 2026-11-23: the owner prioritized the dashboard,
 selected product/technical decisions and reviewed low-fidelity wireframes.
-ADR-0013 and DASHBOARD.md consolidate those decisions; implementation is pending.
+ADR-0013 and DASHBOARD.md consolidate those decisions. Backend sessions, read
+APIs and isolated demo APIs are now implemented; frontend and public deployment
+remain pending. See [backend integration](DASHBOARD_BACKEND.md).
 
 ## Implemented
 
 | Area | Delivered | Evidence |
 | --- | --- | --- |
 | Subscriptions | Creation, trials, plan changes, cancellation, renewal and change history | `SubscriptionService`; `tests/Feature/Services/SubscriptionServiceTest.php` |
-| Authentication | Token issuance/revocation, ability scopes and ownership policies | `routes/api.php`; `tests/Feature/Api/SubscriptionAuthorizationTest.php` |
+| Authentication | Token issuance/revocation, browser sessions/CSRF, effective capabilities and ownership policies | `routes/api.php`; `tests/Feature/Api/SubscriptionAuthorizationTest.php` |
 | Pricing | Tax/coupon quotes, client timeout, circuit breaker and degraded fallback | `services/pricing/src`; `tests/Feature/Services/Pricing/HttpPricingClientTest.php` |
 | Renewal billing | Period invoices, charge attempts, dunning and fake gateway | `IssueInvoiceOnRenewal`; `tests/Feature/Services/Billing/BillingServiceTest.php` |
 | Risk | Redis event consumption, scoring, retries, dead letters and score return to Laravel | `services/risk-worker`; `tests/Feature/Risk/RiskIntegrationTest.php` |
@@ -24,6 +26,7 @@ ADR-0013 and DASHBOARD.md consolidate those decisions; implementation is pending
 | API contract | OpenAPI 3.1 for all current API v1 operations, including required scopes | `docs/openapi.json`; `OpenApiContractTest` |
 
 | Operational metrics | Staff-only Prometheus gauges for billing state and verification backlog, cached read-only snapshots | `OperationalMetrics`; `MetricsEndpointTest`; `docs/OPERATIONS.md` |
+| Dashboard backend | Read-only internal browser sessions, scoped paginated lookup, next-charge estimate and isolated synthetic demo APIs | `tests/Feature/Dashboard`; `docs/DASHBOARD_BACKEND.md` |
 
 ## Financial policies (approved 2026-11-22)
 
@@ -44,9 +47,9 @@ calendar examples, quote confirmation, deadlines and deployment considerations.
   TypeScript, Vite, React Router, TanStack Query, generated OpenAPI client,
   shadcn/ui and Tailwind; Portuguese/English. Customer journeys cover
   subscriptions, plans, invoices and payments. The internal area searches
-  customers and consults subscriptions/invoices. Browser session/CSRF changes,
-  additional API reads and isolated demo provisioning are required. Docker local
-  execution and a public synthetic demo are planned, not deployed. See
+  customers and consults subscriptions/invoices. The browser session/CSRF, read
+  APIs and isolated demo backend are implemented. Frontend integration and public
+  deployment are still pending. The separate local Compose API demo is available. See
   [ADR-0013](adr/0013-customer-and-operations-dashboard.md) and the
   [screen map, dependencies and proposed acceptance checks](DASHBOARD.md).
 - AI-assisted incident remediation, approved on 2026-11-23: a separate service
@@ -60,9 +63,9 @@ calendar examples, quote confirmation, deadlines and deployment considerations.
   documentation delivery; providers, budgets, hosting and credentials remain
   activation/implementation configuration.
 
-The dashboard now has documented scope and proposed acceptance checks, with
-remaining API/security/visual configuration identified. It is not implemented
-or included in the completed modules above. Operational billing metrics are
+The dashboard frontend remains planned. Backend session/capability enforcement,
+scoped lookup operations and synthetic demo workspaces are implemented; final
+visual design and public hosting remain pending. Operational billing metrics are
 implemented; accounting KPIs and Node/Python infrastructure metrics remain
 outside that scope.
 
@@ -218,3 +221,31 @@ including the new pending-payment status. No real financial HTTP call,
 production migration or deployment was performed. Independent review findings
 were corrected and regression-tested; the
 [execution record](tasks/2026-11-22-financial-policies.json) contains evidence.
+
+## Dashboard backend delivery (2026-11-23)
+
+The Laravel backend now implements the session/read/demo portion of ADR-0013.
+The OpenAPI contract covers **27 operations**. Browser sessions use HttpOnly
+cookies and CSRF, staff sessions are read-only, and bearer scope restrictions
+remain intact. Customer/subscription/invoice discovery is authorized and
+paginated. Workspace generations isolate visitors and resets; automatic
+financial/risk work excludes demo data.
+
+Verification: **407 tests, 1,202 assertions and 94.4% line coverage** on
+PostgreSQL 17 and Redis 7. Dashboard regressions also passed on SQLite:
+**23 tests, 141 assertions**. PHPStan maximum level, Pint and Rector checks,
+OpenAPI 3.1 validation and 43 standalone domain checks passed. The entrypoint
+regression covers injected demo configuration and refusal of a missing key.
+
+The production PHP image booted as a non-root user on a dedicated local Compose
+network/database. Real HTTP checks using two independent cookie jars verified
+CSRF rejection/acceptance, session rotation, cross-visitor access refusal,
+read-only staff requests, simulated settlement, profile switch, reset, stale
+cookie rejection and logout. No live payment or public deployment occurred.
+
+Independent review identified and prompted fixes for demo image startup and
+unsafe schema rollback. Rollback is refused while synthetic generations exist;
+expired generations must be pruned first. See the
+[backend guide](DASHBOARD_BACKEND.md) and
+[execution/review record](tasks/2026-11-23-dashboard-backend.json). Frontend
+implementation, final styling and public activation remain pending.

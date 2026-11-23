@@ -27,13 +27,17 @@ it('documents every public API method, route parameter and required ability', fu
             $operation = $contract['paths'][$path][strtolower($method)];
             foreach ($route->middleware() as $middleware) {
                 if (str_starts_with($middleware, 'abilities:')) {
-                    expect($operation['x-token-ability'])->toBe(substr($middleware, strlen('abilities:')));
+                    $abilities = $operation['x-token-abilities'] ?? [$operation['x-token-ability'] ?? ''];
+                    expect($abilities)->toContain(substr($middleware, strlen('abilities:')));
                 }
             }
             if (in_array('auth:sanctum', $route->middleware(), true)) {
-                expect($operation['security'] ?? $contract['security'])->toBe([['bearerAuth' => []]]);
+                $security = str_starts_with($path, '/demo/') ? [['cookieAuth' => []]]
+                    : (in_array($path, ['/metrics', '/auth/tokens/current'], true) ? [['bearerAuth' => []]]
+                        : [['bearerAuth' => []], ['cookieAuth' => []]]);
+                expect($operation['security'] ?? $contract['security'])->toBe($security);
             } else {
-                expect($operation['security'])->toBe([]);
+                expect($operation['security'])->toBe($path === '/demo/profile' ? [['cookieAuth' => []]] : []);
             }
             preg_match_all('/\{([^}]+)\}/', $path, $parameters);
             $documentedParameters = array_column(array_filter($operation['parameters'] ?? [], fn (array $p): bool => $p['in'] === 'path'), 'name');

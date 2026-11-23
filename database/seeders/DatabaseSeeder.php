@@ -11,7 +11,7 @@ final class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        if (app()->isProduction()) {
+        if (app()->isProduction() || config('demo.enabled') === true) {
             return;
         }
         $this->call(PlanSeeder::class);

@@ -52,27 +52,33 @@ final readonly class AuthenticationService
      */
     public function authenticate(LoginData $data): IssuedToken
     {
-        $user = User::query()->where('email', $data->email)->first();
+        $user = $this->verifyCredentials($data->email, $data->password);
+        if ($user->demo_workspace_id !== null) {
+            throw new InvalidCredentialsException;
+        }
+
+        return $this->tokens->issue($user, $data->tokenName, $this->grantableAbilities($user, $data->requestedAbilities));
+    }
+
+    public function verifyCredentials(string $email, string $password): User
+    {
+        $user = User::query()->where('email', $email)->first();
 
         if ($user === null) {
             // Burn the same time a real comparison would before refusing.
             // See the class docblock: the early return is the timing leak.
-            $this->hasher->check($data->password, self::DUMMY_HASH);
+            $this->hasher->check($password, self::DUMMY_HASH);
 
             throw new InvalidCredentialsException;
         }
 
-        if (! $this->hasher->check($data->password, $user->password)) {
+        if (! $this->hasher->check($password, $user->password)) {
             throw new InvalidCredentialsException;
         }
 
         $user->forceFill(['last_login_at' => $this->clock->now()])->save();
 
-        return $this->tokens->issue(
-            $user,
-            $data->tokenName,
-            $this->grantableAbilities($user, $data->requestedAbilities),
-        );
+        return $user;
     }
 
     /**

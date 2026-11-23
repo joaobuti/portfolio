@@ -102,6 +102,12 @@ For a focused technical evaluation, start with:
 
 ## Quality and verification evidence
 
+Dashboard backend verification on **2026-11-23** passed **407 tests, 1,202
+assertions and 94.4% line coverage** on PostgreSQL/Redis. Real HTTP checks covered
+browser sessions, CSRF and two isolated demo visitors. These are local results;
+the React UI and public deployment are still pending.
+[Delivery details](docs/STATUS.md#dashboard-backend-delivery-2026-11-23).
+
 The financial-policy verification recorded on **2026-11-22** reports
 **384 PHP tests, 1,009 assertions and 93.9% line coverage** on PostgreSQL 17 and
 Redis 7, above the 80% coverage gate. It also records passing PHPStan, Pint,
@@ -136,7 +142,7 @@ no money and requires no provider credentials. No login account is seeded.
 Follow the [demo authentication steps](docs/DEVELOPMENT.md#run-it) to create a
 local user, issue a bearer token and request plans. The API runs at
 `http://localhost:8000/api/v1`. The [OpenAPI 3.1 contract](docs/openapi.json)
-documents all **16 operations**, including subscriptions, quote confirmation,
+documents all **27 operations**, including subscriptions, quote confirmation,
 invoices, checkout, authentication and metrics. Requests require their documented
 scopes and ownership or staff permissions.
 
@@ -171,7 +177,8 @@ volumes.** Port overrides and complete setup instructions are in the
 | [Operations](docs/OPERATIONS.md) | Local HTTPS webhooks, checkout recovery and Prometheus metrics |
 | [OpenAPI](docs/openapi.json) | Request/response schemas and security requirements |
 | [AI remediation design](docs/AI_REMEDIATION.md) | Approved architecture for incident triage, tested fixes and reviewed GitLab Merge Requests; implementation pending |
-| [Dashboard design](docs/DASHBOARD.md) | Customer and read-only operations areas, reviewed wireframes, accepted stack and planned API/session changes; implementation pending |
+| [Dashboard design](docs/DASHBOARD.md) | Accepted customer/internal experience and frontend roadmap |
+| [Dashboard backend](docs/DASHBOARD_BACKEND.md) | Implemented browser sessions, scoped queries and isolated local demo APIs |
 
 ## Planned work
 
@@ -179,8 +186,9 @@ volumes.** Port overrides and complete setup instructions are in the
   Portuguese/English, customer self-service and read-only internal inquiry.
   The owner selected the scope, navigation, financial review flows and technical
   stack; low-fidelity wireframes were reviewed. The local/public demo design
-  uses isolated synthetic data and simulated payments. Frontend, session/API
-  adaptations and deployment remain pending.
+  uses isolated synthetic data and simulated payments. Session/read APIs and the
+  isolated local API demo are implemented; frontend and public deployment remain
+  pending. [Backend integration](docs/DASHBOARD_BACKEND.md).
   [Specification](docs/DASHBOARD.md) ·
   [ADR-0013](docs/adr/0013-customer-and-operations-dashboard.md).
 - **AI-assisted incident remediation:** an approved design for detecting errors,

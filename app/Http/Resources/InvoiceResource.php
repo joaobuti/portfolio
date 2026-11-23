@@ -25,6 +25,8 @@ final class InvoiceResource extends JsonResource
             'period' => ['start' => $this->period_start?->toIso8601String(), 'end' => $this->period_end?->toIso8601String()],
             'due_at' => $this->due_at->toIso8601String(), 'paid_at' => $this->paid_at?->toIso8601String(),
             'pricing_degraded' => $this->pricing_degraded,
+            'customer' => CustomerResource::make($this->whenLoaded('customer')),
+            'simulation' => $this->when($this->demo_payment_status !== null, ['payment_status' => $this->demo_payment_status]),
             'checkout' => $this->whenLoaded('checkout', fn (): ?array => $this->checkout === null ? null : $this->checkoutData($this->checkout)),
         ];
     }

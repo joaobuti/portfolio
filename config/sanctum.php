@@ -20,12 +20,9 @@ return [
     */
 
     /*
-    | Empty on purpose. Stateful (cookie) authentication is for a first-party
-    | SPA sharing a domain with the API; this module is called by services and
-    | by a dashboard on its own origin, both with bearer tokens. Leaving the
-    | published default in place would enable the CSRF-cookie path for
-    | localhost in every environment, which is a login surface nobody here uses
-    | and nobody would notice being abused.
+    | Populate explicitly for the same-origin dashboard (ADR-0013). The example
+    | environment lists local hosts; an HTTPS deployment must list its own host.
+    | An unset list keeps integration-only deployments stateless.
     |
     | `(string)` because `env()` is typed `mixed` — explode() on a bool from a
     | misconfigured .env is a fatal at boot rather than at request time.

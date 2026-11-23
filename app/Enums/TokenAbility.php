@@ -31,6 +31,8 @@ enum TokenAbility: string
     case InvoicesWrite = 'invoices:write';
     case MetricsRead = 'metrics:read';
 
+    case CustomersRead = 'customers:read';
+
     /**
      * @param  list<self>  $abilities
      * @return list<string>

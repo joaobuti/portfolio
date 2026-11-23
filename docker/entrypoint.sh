@@ -7,6 +7,10 @@ set -e
 # when a job behaves differently in production than in a request.
 
 role="${CONTAINER_ROLE:-app}"
+hardened=false
+case "${APP_ENV:-production}" in
+    production|demo) hardened=true ;;
+esac
 
 wait_for_dependencies() {
     echo "› waiting for the configured database"
@@ -23,11 +27,11 @@ wait_for_dependencies() {
 }
 
 bootstrap_application() {
-    if [ "${APP_ENV:-production}" != production ] && [ ! -f .env ]; then
+    if [ "$hardened" = false ] && [ ! -f .env ]; then
         cp .env.example .env
     fi
     [ -f vendor/autoload.php ] || composer install --no-interaction --prefer-dist
-    if [ "${APP_ENV:-production}" = production ]; then
+    if [ "$hardened" = true ]; then
         php artisan config:clear
     fi
     if ! php -r '
@@ -36,13 +40,13 @@ bootstrap_application() {
         $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
         exit(is_string(config("app.key")) && config("app.key") !== "" ? 0 : 1);
     '; then
-        if [ "${APP_ENV:-production}" = production ]; then
-            echo 'APP_KEY must be supplied for production.' >&2
+        if [ "$hardened" = true ]; then
+            echo "APP_KEY must be supplied for ${APP_ENV:-production}." >&2
             exit 1
         fi
         php artisan key:generate --force
     fi
-    if [ "${APP_ENV:-production}" = production ]; then
+    if [ "$hardened" = true ]; then
         # Runtime secrets and service addresses must be injected before caching.
         php artisan config:cache
         php artisan route:cache
@@ -55,7 +59,7 @@ case "$role" in
         bootstrap_application
         wait_for_dependencies
         php artisan migrate --force
-        if [ "${APP_ENV:-production}" != production ]; then
+        if [ "$hardened" = false ]; then
             php artisan db:seed --force
         fi
         echo "› serving on http://localhost:8000"

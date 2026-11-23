@@ -1,0 +1,96 @@
+# Dedicated local API demonstration; no host .env/vendor bind mount, live gateway,
+# shared application database, risk worker or queued financial processing.
+x-demo-env: &demo-env
+  APP_NAME: Portfolio Billing Demo
+  APP_ENV: demo
+  APP_DEBUG: "false"
+  APP_KEY: ${DEMO_APP_KEY:?Generate a dedicated demo application key first}
+  APP_URL: http://localhost:${DEMO_PORT:-8001}
+  DEMO_ENABLED: "true"
+  DEMO_TTL_MINUTES: ${DEMO_TTL_MINUTES:-60}
+  DEMO_MAX_WORKSPACES: ${DEMO_MAX_WORKSPACES:-100}
+  BILLING_GATEWAY: fake
+  INFINITEPAY_HANDLE: ""
+  INFINITEPAY_API_KEY: ""
+  RISK_WORKER_ENABLED: "false"
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: billing_demo
+  DB_USERNAME: billing_demo
+  DB_PASSWORD: synthetic_local_demo
+  CACHE_STORE: redis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  SESSION_COOKIE: portfolio_billing_demo_session
+  SESSION_LIFETIME: "60"
+  SESSION_SECURE_COOKIE: ${DEMO_SECURE_COOKIE:-false}
+  SANCTUM_STATEFUL_DOMAINS: ${DEMO_STATEFUL_DOMAINS:-localhost:8001,127.0.0.1:8001}
+  LOG_CHANNEL: stderr
+
+services:
+  app:
+    image: portfolio-billing-dashboard-demo:local
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    environment:
+      <<: *demo-env
+      CONTAINER_ROLE: app
+    ports:
+      - "127.0.0.1:${DEMO_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1
+
+  scheduler:
+    image: portfolio-billing-dashboard-demo:local
+    environment:
+      <<: *demo-env
+      CONTAINER_ROLE: scheduler
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: billing_demo
+      POSTGRES_USER: billing_demo
+      POSTGRES_PASSWORD: synthetic_local_demo
+    volumes:
+      - demo-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing_demo -d billing_demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 96mb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 128m
+
+volumes:
+  demo-postgres:

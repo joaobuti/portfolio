@@ -30,6 +30,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $password
  * @property UserRole $role
  * @property int|null $customer_id
+ * @property int|null $demo_workspace_id
  * @property Carbon|null $last_login_at
  * @property-read Customer|null $customer
  */
@@ -50,6 +51,8 @@ final class User extends Authenticatable
     use HasFactory;
 
     use HasUuids;
+
+    protected $attributes = ['demo_workspace_id' => null, 'remember_token' => null];
 
     /**
      * @return list<string>
@@ -91,6 +94,10 @@ final class User extends Authenticatable
      */
     public function canActOnCustomerId(?int $customerId): bool
     {
+        if ($customerId === null || ! Customer::query()->whereKey($customerId)
+            ->where('demo_workspace_id', $this->demo_workspace_id)->exists()) {
+            return false;
+        }
         if ($this->role->accessesAnyCustomer()) {
             return true;
         }
@@ -99,7 +106,6 @@ final class User extends Authenticatable
         // customer must match nobody, and `null === null` would otherwise
         // authorise them against any unsaved record.
         return $this->customer_id !== null
-            && $customerId !== null
             && $this->customer_id === $customerId;
     }
 
@@ -112,6 +118,7 @@ final class User extends Authenticatable
             'role' => UserRole::class,
             'password' => 'hashed',
             'last_login_at' => 'immutable_datetime',
+            'demo_workspace_id' => 'integer',
         ];
     }
 }

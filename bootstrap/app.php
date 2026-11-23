@@ -16,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->statefulApi();
+        $middleware->api(append: [App\Http\Middleware\DemoBoundary::class]);
         // A correlation id is attached to every request and propagated onto
         // every queued job and log line. It is what makes a single customer
         // action traceable from the HTTP edge, through Redis, into the worker.
@@ -27,7 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // `abilities:subscriptions:write` instead of a class name. `abilities`
         // requires all of them; `ability` requires any one.
         $middleware->alias([
-            'abilities' => Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+            'abilities' => App\Http\Middleware\RequireAbilities::class,
             'ability' => Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
         ]);
     })

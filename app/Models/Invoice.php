@@ -49,6 +49,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property CarbonImmutable|null $repriced_at
  * @property string|null $pricing_region
  * @property string|null $coupon_code
+ * @property string|null $demo_payment_status
  * @property-read Customer $customer
  * @property-read Subscription|null $subscription
  * @property-read \Illuminate\Database\Eloquent\Collection<int, ChargeAttempt> $attempts
@@ -85,6 +86,8 @@ final class Invoice extends Model
     use HasFactory;
 
     use HasUuids;
+
+    protected $attributes = ['demo_payment_status' => null];
 
     /**
      * @return list<string>
@@ -210,5 +213,12 @@ final class Invoice extends Model
             ->where('pricing_degraded', false)
             ->whereNotNull('next_attempt_at')
             ->where('next_attempt_at', '<=', $asOf);
+    }
+
+    /** @param Builder<$this> $query */
+    #[Scope]
+    protected function automated(Builder $query): void
+    {
+        $query->whereHas('customer', static fn (Builder $customer) => $customer->whereNull('demo_workspace_id'));
     }
 }

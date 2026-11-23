@@ -6,9 +6,9 @@
 Planning update, 2026-11-23: [ADR-0013](0013-customer-and-operations-dashboard.md)
 accepts a same-origin browser dashboard using session cookies and CSRF. It
 partially supersedes this document's bearer-only deployment assumption for that
-future browser client. The current runtime remains token-based until the
-session/capability changes are implemented; integration-token scopes and
-customer ownership checks remain required.
+browser client. The runtime now supports explicitly configured browser sessions
+and effective session capabilities; integration-token scopes and customer
+ownership checks remain required. See the [backend guide](../DASHBOARD_BACKEND.md).
 
 ## Context
 

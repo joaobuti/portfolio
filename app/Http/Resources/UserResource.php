@@ -18,6 +18,9 @@ final class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        /** @var User $user */
+        $user = $this->resource;
+
         return [
             'uuid' => $this->uuid,
             'name' => $this->name,
@@ -34,7 +37,7 @@ final class UserResource extends JsonResource
             // What this particular token may do — not what the role could do.
             // A client that reads this can hide actions it would be refused,
             // which is the difference between a usable UI and a wall of 403s.
-            'abilities' => $request->user()?->currentAccessToken()->abilities ?? [],
+            'abilities' => app(\App\Services\Auth\EffectiveAbilities::class)->forUser($user),
 
             'last_login_at' => $this->last_login_at?->format(DATE_ATOM),
         ];

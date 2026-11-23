@@ -70,7 +70,7 @@ final class ProcessSubscriptionRenewal implements ShouldBeUnique, ShouldQueue
 
     public function handle(SubscriptionService $subscriptions): void
     {
-        $subscription = Subscription::query()
+        $subscription = Subscription::query()->automated()
             ->where('uuid', $this->subscriptionUuid)
             ->first();
 

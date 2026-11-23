@@ -19,7 +19,7 @@ final class ExpireAdjustmentInvoicesCommand extends Command
 
     public function handle(Clock $clock): int
     {
-        Invoice::query()->where('kind', InvoiceKind::Adjustment)->where('status', InvoiceStatus::Open)
+        Invoice::query()->automated()->where('kind', InvoiceKind::Adjustment)->where('status', InvoiceStatus::Open)
             ->where('payment_deadline_at', '<=', $clock->now())->lazyById()
             ->each(static function (Invoice $invoice): void {
                 ExpireAdjustmentInvoice::dispatch($invoice->uuid);

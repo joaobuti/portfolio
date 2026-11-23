@@ -18,10 +18,8 @@ return [
     */
 
     /*
-    | This module is an API with no browser session. The default guard is
-    | Sanctum so that `auth()->user()` means the same thing in a controller, a
-    | console command and a queued job — rather than silently resolving a
-    | session guard that can never be populated here.
+    | Sanctum accepts scoped integration tokens and trusted first-party browser
+    | sessions. Login/logout deliberately use the web guard by name.
     */
     'defaults' => [
         'guard' => env('AUTH_GUARD', 'sanctum'),
@@ -51,9 +49,7 @@ return [
             'provider' => 'users',
         ],
 
-        // Retained because Laravel's password broker and a handful of
-        // framework internals resolve it by name. Nothing in this application
-        // routes through it — there is no session and no login form.
+        // First-party dashboard sessions, protected by the web/CSRF middleware.
         'web' => [
             'driver' => 'session',
             'provider' => 'users',

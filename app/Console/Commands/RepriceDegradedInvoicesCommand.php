@@ -18,7 +18,7 @@ final class RepriceDegradedInvoicesCommand extends Command
 
     public function handle(Clock $clock): int
     {
-        Invoice::query()->where('status', InvoiceStatus::Open)->where('pricing_degraded', true)
+        Invoice::query()->automated()->where('status', InvoiceStatus::Open)->where('pricing_degraded', true)
             ->where(fn ($query) => $query->whereNull('pricing_retry_at')->orWhere('pricing_retry_at', '<=', $clock->now()))
             ->whereDoesntHave('checkout')->whereDoesntHave('attempts')->lazyById()
             ->each(static function (Invoice $invoice): void {

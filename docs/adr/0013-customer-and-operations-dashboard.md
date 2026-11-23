@@ -1,6 +1,6 @@
 # ADR-0013: Customer and read-only operations dashboard
 
-- Status: product and technical decisions accepted; implementation pending
+- Status: accepted; backend implemented, React UI and public deployment pending
 - Date: 2026-11-23 (America/Sao_Paulo)
 - Partially supersedes ADR-0006's bearer-only assumption for the future browser dashboard
 
@@ -50,17 +50,17 @@ or imply a working frontend, authenticated demo or deployment.
 ## Authentication consequences
 
 ADR-0006 anticipated revisiting its deployment assumption when a first-party SPA
-arrived. This decision chooses that direction; it does not enable it in code.
-Configure stateful middleware/domains, login/logout, session lifecycle, CSRF and
-effective browser capabilities intentionally. Update the current-user response
-for session authentication; it currently reads abilities from the access token.
+arrived. Stateful middleware, session login/logout, CSRF and effective browser
+capabilities are now implemented. Trusted browser domains remain explicit
+deployment configuration. The current-user response supports both browser
+sessions and scoped integration tokens.
 
 Sanctum SPA authentication does not preserve personal-token scope semantics
 automatically. Enforce the read-only internal-session ceiling on the backend,
 including direct requests, while preserving customer ownership checks and the
 existing narrower-token restrictions for integrations. Hiding buttons is not
-authorization. The current broad staff model is not proof that this new
-read-only dashboard boundary is implemented.
+authorization. Effective browser capabilities and middleware now enforce the
+read-only session ceiling independently of the broader staff integration role.
 
 ## API and demonstration consequences
 
@@ -76,5 +76,6 @@ deployment details must be settled before public activation.
 
 The [dashboard specification](../DASHBOARD.md) records screens, flows, permission
 requirements, backend dependencies, proposed acceptance checks and remaining
-implementation details. ADR-0011's billing rules remain unchanged. This delivery
-contains documentation only; the current OpenAPI contract is not expanded here.
+implementation details. ADR-0011's billing rules remain unchanged. The
+[backend integration guide](../DASHBOARD_BACKEND.md) documents the delivered
+session/read/demo APIs; the OpenAPI contract now contains 27 operations.

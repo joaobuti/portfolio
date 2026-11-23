@@ -143,7 +143,7 @@ final class ConsumeRiskScoresCommand extends Command
             return false;
         }
 
-        $customer = Customer::query()
+        $customer = Customer::query()->whereNull('demo_workspace_id')
             ->where('uuid', $customerUuid)
             ->first();
 

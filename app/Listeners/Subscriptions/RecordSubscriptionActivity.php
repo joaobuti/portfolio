@@ -33,6 +33,11 @@ final class RecordSubscriptionActivity implements ShouldQueue
 
     public string $queue = 'observability';
 
+    public function shouldQueue(SubscriptionCreated|SubscriptionPlanChanged|SubscriptionRenewed|SubscriptionCanceled|SubscriptionExpired $event): bool
+    {
+        return $event->subscription->customer()->whereNull('demo_workspace_id')->exists();
+    }
+
     public function handleCreated(SubscriptionCreated $event): void
     {
         $this->write('subscription.created', $event->subscription->uuid, [

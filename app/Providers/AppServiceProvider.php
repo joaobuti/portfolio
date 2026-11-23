@@ -51,7 +51,13 @@ final class AppServiceProvider extends ServiceProvider
         // fail loudly at boot, not silently resolve to something that takes
         // real money.
         $this->app->bind(PaymentGateway::class, FakePaymentGateway::class);
-        $this->app->bind(CheckoutGateway::class, InfinitePayGateway::class);
+        $this->app->bind(CheckoutGateway::class, static function (Application $app): CheckoutGateway {
+            if (config('demo.enabled') === true) {
+                throw new InvalidArgumentException('Live checkout is forbidden in the demo environment.');
+            }
+
+            return $app->make(InfinitePayGateway::class);
+        });
         $this->app->bind(BillingService::class, static fn (Application $app): BillingService => new BillingService(
             gateway: match (config('billing.gateway')) {
                 'fake' => $app->make(PaymentGateway::class),
@@ -70,9 +76,11 @@ final class AppServiceProvider extends ServiceProvider
         // suite that discovers it during an outage.
         $this->app->singleton(
             PricingClient::class,
-            static fn (Application $app): PricingClient => config('pricing.enabled')
+            static fn (Application $app): PricingClient => config('demo.enabled') === true
+                ? new \App\Services\Demo\DemoPricingClient
+                : (config('pricing.enabled')
                 ? $app->make(HttpPricingClient::class)
-                : new NullPricingClient,
+                : new NullPricingClient),
         );
     }
 
@@ -115,6 +123,7 @@ final class AppServiceProvider extends ServiceProvider
 
     private function configureRateLimiting(): void
     {
+        RateLimiter::for('demo', static fn (Request $request): Limit => Limit::perMinute(5)->by($request->ip()));
         RateLimiter::for('infinitepay-webhooks', static fn (Request $request): Limit => Limit::perMinute(120)->by($request->ip()));
         RateLimiter::for('api', static fn (Request $request): Limit => Limit::perMinute(60)
             ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));

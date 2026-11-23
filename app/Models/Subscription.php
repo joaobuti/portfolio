@@ -167,4 +167,11 @@ final class Subscription extends Model
                 static fn (SubscriptionStatus $status): bool => $status->isRenewable(),
             )));
     }
+
+    /** @param Builder<$this> $query */
+    #[Scope]
+    protected function automated(Builder $query): void
+    {
+        $query->whereHas('customer', static fn (Builder $customer) => $customer->whereNull('demo_workspace_id'));
+    }
 }

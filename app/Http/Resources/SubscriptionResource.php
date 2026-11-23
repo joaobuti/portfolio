@@ -33,6 +33,17 @@ final class SubscriptionResource extends JsonResource
                 'end' => $this->current_period_end->toIso8601String(),
             ],
             'cancel_at_period_end' => $this->cancel_at_period_end,
+            // Base recurring subtotal, not a promise of future tax/coupon totals.
+            'next_charge' => $this->whenLoaded('plan', function (): ?array {
+                if (! $this->status->isRenewable() || $this->cancel_at_period_end) {
+                    return null;
+                }
+                $plan = $this->pending_plan_id === null ? $this->plan
+                    : ($this->relationLoaded('pendingPlan') ? $this->pendingPlan : $this->pendingPlan()->first());
+
+                return $plan === null ? null : ['at' => $this->current_period_end->toIso8601String(),
+                    'plan' => $plan->code, 'subtotal' => $plan->amount, 'estimated' => true];
+            }),
             'canceled_at' => $this->canceled_at?->toIso8601String(),
             'ended_at' => $this->ended_at?->toIso8601String(),
             'changes' => SubscriptionChangeResource::collection($this->whenLoaded('changes')),

@@ -59,4 +59,22 @@ chmod +x "$fixture/bin/php"
         $config = require "bootstrap/cache/config.php";
         exit($config["app"]["key"] === getenv("APP_KEY") ? 0 : 1);
     '
+    # The production image has no writable code root or .env. Demo must use
+    # injected configuration and preserve the same key/caching contract.
+    rm -f "$fixture/.env"
+    export APP_ENV=demo DEMO_ENABLED=true APP_DEBUG=false
+    export DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_STORE=array
+    export BILLING_GATEWAY=fake RISK_WORKER_ENABLED=false
+    timeout 10 sh "$project_root/docker/entrypoint.sh"
+    test ! -f "$fixture/.env"
+    "$READINESS_PHP_BINARY" -r '
+        $config = require "bootstrap/cache/config.php";
+        exit($config["app"]["env"] === "demo" && $config["demo"]["enabled"] === true ? 0 : 1);
+    '
+    unset APP_KEY
+    if timeout 10 sh "$project_root/docker/entrypoint.sh" > "$fixture/missing-key.log" 2>&1; then
+        echo 'Demo unexpectedly accepted a missing key.' >&2
+        exit 1
+    fi
+    grep -q 'APP_KEY must be supplied for demo.' "$fixture/missing-key.log"
 )

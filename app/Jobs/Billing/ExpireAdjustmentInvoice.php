@@ -31,7 +31,7 @@ final class ExpireAdjustmentInvoice implements ShouldBeUnique, ShouldQueue
 
     public function handle(BillingService $billing): void
     {
-        $invoice = Invoice::query()->where('uuid', $this->invoiceUuid)->first();
+        $invoice = Invoice::query()->automated()->where('uuid', $this->invoiceUuid)->first();
         if ($invoice !== null) {
             $billing->expireAdjustment($invoice);
         }

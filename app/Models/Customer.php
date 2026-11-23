@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
+ * @property int|null $demo_workspace_id
  * @property string $uuid
  * @property string $name
  * @property string $email
@@ -39,6 +40,8 @@ final class Customer extends Model
     use HasFactory;
 
     use HasUuids;
+
+    protected $attributes = ['demo_workspace_id' => null];
 
     /**
      * The UUID is what we expose publicly; the auto-increment id never leaves
@@ -77,6 +80,7 @@ final class Customer extends Model
     {
         return [
             'risk_score' => 'integer',
+            'demo_workspace_id' => 'integer',
             'risk_band' => RiskBand::class,
             'risk_scored_at' => 'immutable_datetime',
         ];

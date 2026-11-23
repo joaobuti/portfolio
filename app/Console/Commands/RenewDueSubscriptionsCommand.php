@@ -48,7 +48,7 @@ final class RenewDueSubscriptionsCommand extends Command
 
         $queued = 0;
 
-        Subscription::query()
+        Subscription::query()->automated()
             ->dueForRenewal($asOf)
             ->orderBy('id')
             ->lazyById()

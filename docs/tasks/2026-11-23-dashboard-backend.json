@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-23-dashboard-backend",
+  "phase": "verified",
+  "scope": "Prepare Laravel backend for accepted dashboard: browser sessions/capabilities, lookup contracts and isolated synthetic demo. No frontend, production deployment, real payment activation or AI agent.",
+  "requirements": [
+    {
+      "id": "DB-001",
+      "text": "HttpOnly browser sessions, CSRF and session-compatible identity/logout without widening bearer tokens",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "HttpOnly session login/CSRF/logout, effective identity; scoped bearer behavior preserved",
+      "evidence": [
+        "SessionController",
+        "EffectiveAbilities",
+        "SessionAndLookupTest"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DB-002",
+      "text": "Read-only staff dashboard permissions enforced server-side",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Backend-enforced staff session read-only including preview and token issuance; token role/scope ceilings remain enforced",
+      "evidence": [
+        "DashboardAccess",
+        "RequireAbilities",
+        "SessionAndLookupTest"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DB-003",
+      "text": "Paginated customer/subscription/invoice discovery and next-charge contract",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Paginated authorized discovery/search and scheduled recurring base estimate",
+      "evidence": [
+        "DashboardCatalog",
+        "DashboardController",
+        "SubscriptionResource",
+        "27-operation OpenAPI contract"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DB-004",
+      "text": "Per-visitor demo identities, prepared scenarios, role switch/reset, TTL/cap/prune and no real gateway",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Generation-scoped visitor profiles/scenarios/reset, expiry/cap/pruning and dedicated env gates",
+      "evidence": [
+        "DemoProvisioner",
+        "DemoConfiguration",
+        "DemoPruner",
+        "DemoIsolationTest",
+        "docker-compose.demo.yml"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DB-005",
+      "text": "Simulated pending/declined/approved outcomes respect invoice eligibility and independent state",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Pending/declined/approved simulation via normal billing with no live gateway; initial/adjustment state stays independent",
+      "evidence": [
+        "DemoPayments",
+        "SimulationGateway",
+        "DemoIsolationTest complete upgrade/downgrade/cancel flow"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DB-006",
+      "text": "Automatic jobs/risk exclude demo data and cannot cross reset generations",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Automated invoice/subscription/risk work excludes all demo generations; no queued demo lifecycle work",
+      "evidence": [
+        "automated() scopes, job guards and listener shouldQueue",
+        "ConsumeRiskScoresCommand",
+        "DemoIsolationTest"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DB-007",
+      "text": "OpenAPI, docs and meaningful regression/static checks plus independent review",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "OpenAPI/docs complete; full runtime/coverage/static/schema/HTTP checks passed; independent review approved after corrections",
+      "evidence": [
+        "docs/DASHBOARD_BACKEND.md",
+        "tests/Feature/Dashboard",
+        "validation"
+      ],
+      "pending": null,
+      "reason": null
+    }
+  ],
+  "spec": {
+    "permissions": "Session staff read-only including preview writes; customers owned data; token scopes preserved; no raw session credential in JS",
+    "isolation": "Dedicated demo environment; workspace foreign keys on users/customers, server authorization boundary; generation replaced on reset; automatic jobs exclude demo data; synthetic fixtures only",
+    "defaults": "Configurable 60 minute absolute workspace TTL and 100 workspace hard cap; demo is off by default and requires APP_ENV=demo, fake gateway, risk disabled and no InfinitePay secrets; numerical defaults are implementation assumptions not new product policy",
+    "outputs": "API/session endpoints, migrations, authorization, simulated payment adapter, lookups, OpenAPI/docs and regression checks",
+    "acceptance": "Session CSRF/login/logout works, direct staff writes denied, scopes/ownership intact; two visitors isolated through reset and queued jobs; no demo route reachable outside demo mode; required quality gates and independent review"
+  },
+  "validation": [
+    {
+      "check": "Full Pest suite, direct runner with PostgreSQL17/Redis7 and Xdebug coverage",
+      "result": "407 passed; 1202 assertions; 94.4% lines, above80% gate"
+    },
+    {
+      "check": "SQLite dashboard suite",
+      "result": "23 passed; 141 assertions"
+    },
+    {
+      "check": "Standalone domain checks",
+      "result": "43 passed"
+    },
+    {
+      "check": "PHPStan max/Pint/Rector",
+      "result": "passed"
+    },
+    {
+      "check": "OpenAPI 3.1 validator and runtime route/security contract",
+      "result": "passed; 27 operations"
+    },
+    {
+      "check": "Production image / dedicated Compose / real HTTP",
+      "result": "passed: non-root boot; two independent cookie jars; CSRF; scopes; staff read-only; payment; profile/reset/replay/logout"
+    },
+    {
+      "check": "Entrypoint startup regression",
+      "result": "passed: local .env readiness, production injected key/cache, demo env-only boot and missing-key refusal"
+    },
+    {
+      "check": "Initial infrastructure baseline",
+      "result": "23 failures due to absent Redis/pricing; rerun checks use dedicated isolated services, no application failure suppressed"
+    },
+    {
+      "check": "Composer audit --locked",
+      "result": "No vulnerability advisories reported"
+    },
+    {
+      "check": "Local docs and credential patterns",
+      "result": "64 local links valid;65 changed/new files scanned; no private-key/GitHub/AWS/GitLab credential patterns"
+    },
+    {
+      "check": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "Independent review agent",
+      "initial": "Two material blockers: non-root demo startup and rollback isolation loss",
+      "final": "Both corrected with matching regressions. All seven requirements covered; no remaining material findings. Reviewer independently checked diff integrity; runtime totals are executor evidence."
+    }
+  ],
+  "corrections": [
+    {
+      "cause": "Demo APP_ENV was treated as development by entrypoint",
+      "fix": "Production-style injected key/config/routes/events for demo, no .env creation/seeding",
+      "prevention": "Entrypoint regression and fresh non-root Compose HTTP smoke",
+      "verification": "Passed"
+    },
+    {
+      "cause": "Rollback would remove workspace tags while leaving synthetic records",
+      "fix": "Refuse down() while demo generations/tagged rows exist",
+      "prevention": "Rollback regression preserving schema and data",
+      "verification": "Passed"
+    }
+  ],
+  "publicationNote": "Published for human review from codex/dashboard-backend, not automatically merged or publicly deployed. Exact final commit and remote ref evidence is verified after committing and stored in .git outside this self-referencing record."
+}

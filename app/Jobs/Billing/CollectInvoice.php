@@ -74,7 +74,7 @@ final class CollectInvoice implements ShouldBeUnique, ShouldQueue
 
     public function handle(BillingService $billing): void
     {
-        $invoice = Invoice::query()
+        $invoice = Invoice::query()->automated()
             ->with('customer')
             ->where('uuid', $this->invoiceUuid)
             ->first();

@@ -44,9 +44,14 @@ final class PublishPaymentFailedForRisk implements ShouldQueue
 
     public string $queue = 'observability';
 
+    public function shouldQueue(PaymentFailed $event): bool
+    {
+        return config('risk.enabled') === true && $event->invoice->customer()->whereNull('demo_workspace_id')->exists();
+    }
+
     public function __invoke(PaymentFailed $event): void
     {
-        if (config('risk.enabled') !== true) {
+        if (config('risk.enabled') !== true || $event->invoice->customer()->whereNotNull('demo_workspace_id')->exists()) {
             return;
         }
 
