@@ -120,6 +120,32 @@ PHP tests, coverage, dependency auditing and production image builds. Pricing
 and risk checks run when their service files change. GitHub hosts the public
 copy; no separate GitHub Actions workflow or production deployment is configured.
 
+## Authentication
+
+Laravel Sanctum supports two complementary authentication flows:
+
+- **Browser dashboard:** an HttpOnly session cookie with CSRF protection,
+  with UI and API on the same origin. Initialize with
+  `GET /api/v1/auth/csrf`, sign in using an existing account at
+  `POST /api/v1/auth/session`, and sign out with
+  `DELETE /api/v1/auth/session`. Login rotates the session and CSRF token;
+  it does not issue a bearer token.
+- **API integrations:** bearer tokens issued at `POST /api/v1/auth/tokens`,
+  sent as `Authorization: Bearer <token>`, and revoked with
+  `DELETE /api/v1/auth/tokens/current`. Existing token scopes remain enforced.
+
+`GET /api/v1/auth/me` returns the identity and effective abilities for either
+flow. Customer access is restricted to owned data. Internal browser sessions
+are read-only, including direct API requests; staff integration tokens retain
+only the capabilities their role and token grant.
+
+The isolated demo has a separate, demo-only entry at
+`POST /api/v1/demo/session`: it creates synthetic visitor data and selects a
+profile without requesting credentials. It is disabled in normal deployments.
+See the [session, CSRF and demo integration guide](docs/DASHBOARD_BACKEND.md)
+for cookie handling, trusted-host configuration and the dedicated local demo.
+The React login interface and public deployment remain pending.
+
 ## Run the local demo
 
 Requirements: Git and Docker with Compose v2. Use Linux, macOS or WSL2 on
@@ -139,8 +165,11 @@ Python risk worker, PostgreSQL and Redis. Development startup creates a local
 migrations and seeds plans plus a demo customer. The default fake gateway takes
 no money and requires no provider credentials. No login account is seeded.
 
-Follow the [demo authentication steps](docs/DEVELOPMENT.md#run-it) to create a
-local user, issue a bearer token and request plans. The API runs at
+For the API quick start, follow the
+[bearer-token example](docs/DEVELOPMENT.md#run-it) to create a local user,
+issue a token and request plans. For browser sessions or the separate isolated
+demo, use the [dashboard backend guide](docs/DASHBOARD_BACKEND.md).
+The API runs at
 `http://localhost:8000/api/v1`. The [OpenAPI 3.1 contract](docs/openapi.json)
 documents all **27 operations**, including subscriptions, quote confirmation,
 invoices, checkout, authentication and metrics. Requests require their documented

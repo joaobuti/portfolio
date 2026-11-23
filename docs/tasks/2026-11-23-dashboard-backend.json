@@ -178,6 +178,12 @@
       "fix": "Refuse down() while demo generations/tagged rows exist",
       "prevention": "Rollback regression preserving schema and data",
       "verification": "Passed"
+    },
+    {
+      "cause": "README linked the new session guide but its authentication quick start still described only bearer tokens",
+      "fix": "Add an explicit authentication section distinguishing browser cookies/CSRF, integration bearer tokens and demo-only entry; clarify the existing quick-start example",
+      "prevention": "Cross-check README authentication mentions directly against both session and token routes when changing authentication",
+      "verification": "All 42 README local links/anchors valid; endpoint names checked against routes/api.php; git diff --check passed; documentation-only correction, no runtime tests required"
     }
   ],
   "publicationNote": "Published for human review from codex/dashboard-backend, not automatically merged or publicly deployed. Exact final commit and remote ref evidence is verified after committing and stored in .git outside this self-referencing record."
