@@ -37,8 +37,13 @@ approved financial policies; see
 
 ## Run it
 
+The source is available on [GitHub](https://github.com/joaobuti/portfolio) and
+[GitLab](https://gitlab.com/joaobuti/portfolio). GitLab remains the primary remote
+for pulls and CI.
+
 ```bash
-git clone <this-repo> && cd portfolio-billing
+git clone https://github.com/joaobuti/portfolio.git portfolio-billing
+cd portfolio-billing
 make up
 ```
 
@@ -89,6 +94,41 @@ coverage, dependency auditing and image builds; `make check` does not run those.
 `make domain-check` is worth thirty seconds of your time: it runs the money and
 proration logic with nothing but `php`, no vendor directory required. That it
 *can* run that way is the architectural claim this project is making.
+
+## Publishing to GitLab and GitHub
+
+Git remote configuration is local to each clone. After cloning from either host,
+run this once to keep GitLab as the primary remote and make `git push` (or
+`git push origin main`) send to both hosts:
+
+```bash
+git remote set-url origin git@gitlab.com:joaobuti/portfolio.git
+git remote add github https://github.com/joaobuti/portfolio.git
+git config --local --replace-all remote.origin.pushurl git@gitlab.com:joaobuti/portfolio.git
+git config --local --add remote.origin.pushurl https://github.com/joaobuti/portfolio.git
+git remote -v
+```
+
+These commands assume a fresh clone without a `github` remote. Both hosts need
+authentication: SSH for GitLab and an HTTPS credential with write access for
+GitHub. Pulls still use GitLab; the `github` remote also allows
+fetching or retrying a push to GitHub directly.
+
+GitHub can also use `git@github.com:joaobuti/portfolio.git` in both URLs if
+the configured SSH key has write access to this repository. The maintainer's
+current setup uses HTTPS because the default SSH key belongs to another account
+and the `github-joaobuti` alias uses a deploy key scoped to jboot.
+
+```bash
+git push                  # push the current tracked branch to both hosts
+git push origin --tags    # publish tags to both hosts
+```
+
+The two pushes are sequential and are not a single transaction. If one fails,
+resolve its error and repeat the push; Git skips refs already up to date.
+Changes pushed from another clone or merged in GitLab need a push from a clone
+with this configuration to reach GitHub. This setup does not mirror server-side
+changes automatically.
 
 ## What it does
 
