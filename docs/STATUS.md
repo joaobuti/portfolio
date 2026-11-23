@@ -7,6 +7,10 @@ Planning update on 2026-11-23: the owner approved the AI remediation architectur
 in ADR-0012. Only its documentation is delivered; runtime implementation and
 continuous monitoring remain pending.
 
+Dashboard planning update on 2026-11-23: the owner prioritized the dashboard,
+selected product/technical decisions and reviewed low-fidelity wireframes.
+ADR-0013 and DASHBOARD.md consolidate those decisions; implementation is pending.
+
 ## Implemented
 
 | Area | Delivered | Evidence |
@@ -36,6 +40,15 @@ calendar examples, quote confirmation, deadlines and deployment considerations.
 
 ## Planned work
 
+- Customer and read-only operations dashboard (current priority): React/strict
+  TypeScript, Vite, React Router, TanStack Query, generated OpenAPI client,
+  shadcn/ui and Tailwind; Portuguese/English. Customer journeys cover
+  subscriptions, plans, invoices and payments. The internal area searches
+  customers and consults subscriptions/invoices. Browser session/CSRF changes,
+  additional API reads and isolated demo provisioning are required. Docker local
+  execution and a public synthetic demo are planned, not deployed. See
+  [ADR-0013](adr/0013-customer-and-operations-dashboard.md) and the
+  [screen map, dependencies and proposed acceptance checks](DASHBOARD.md).
 - AI-assisted incident remediation, approved on 2026-11-23: a separate service
   captures sanitized errors, groups incidents, reproduces code defects and
   prepares tested corrections as GitLab Merge Requests. Human review controls
@@ -46,10 +59,10 @@ calendar examples, quote confirmation, deadlines and deployment considerations.
   coding agent, publisher or synchronization worker is implemented by this
   documentation delivery; providers, budgets, hosting and credentials remain
   activation/implementation configuration.
-- React dashboard with a generated client, dependent on OpenAPI.
 
-The dashboard has no implementation or acceptance criteria yet and is not
-included in the completed modules above. Operational billing metrics are
+The dashboard now has documented scope and proposed acceptance checks, with
+remaining API/security/visual configuration identified. It is not implemented
+or included in the completed modules above. Operational billing metrics are
 implemented; accounting KPIs and Node/Python infrastructure metrics remain
 outside that scope.
 

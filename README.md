@@ -171,9 +171,18 @@ volumes.** Port overrides and complete setup instructions are in the
 | [Operations](docs/OPERATIONS.md) | Local HTTPS webhooks, checkout recovery and Prometheus metrics |
 | [OpenAPI](docs/openapi.json) | Request/response schemas and security requirements |
 | [AI remediation design](docs/AI_REMEDIATION.md) | Approved architecture for incident triage, tested fixes and reviewed GitLab Merge Requests; implementation pending |
+| [Dashboard design](docs/DASHBOARD.md) | Customer and read-only operations areas, reviewed wireframes, accepted stack and planned API/session changes; implementation pending |
 
 ## Planned work
 
+- **Customer and operations dashboard (current priority):** React/TypeScript,
+  Portuguese/English, customer self-service and read-only internal inquiry.
+  The owner selected the scope, navigation, financial review flows and technical
+  stack; low-fidelity wireframes were reviewed. The local/public demo design
+  uses isolated synthetic data and simulated payments. Frontend, session/API
+  adaptations and deployment remain pending.
+  [Specification](docs/DASHBOARD.md) ·
+  [ADR-0013](docs/adr/0013-customer-and-operations-dashboard.md).
 - **AI-assisted incident remediation:** an approved design for detecting errors,
   reproducing code defects in isolation and opening tested GitLab Merge Requests.
   Human review controls merging and deployment; approved changes then synchronize
@@ -181,8 +190,6 @@ volumes.** Port overrides and complete setup instructions are in the
   agent or continuous monitor is implemented yet.
   [Architecture, safeguards and acceptance criteria](docs/AI_REMEDIATION.md) ·
   [ADR-0012](docs/adr/0012-ai-assisted-incident-remediation.md).
-- **React/TypeScript dashboard:** a client generated from the OpenAPI contract.
-  Its implementation and acceptance criteria are pending.
 
 ## License
 

@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "taskId": "2026-11-23-dashboard-design",
+  "phase": "verified",
+  "scope": "Consolidate accepted dashboard decisions and reviewed conversational wireframes into project documentation. No runtime implementation, deployment, new API operation or export of the conversational visualization.",
+  "requirements": [
+    {
+      "id": "DASH-DOC-001",
+      "text": "Consolidate owner-selected audience, scope, languages, visual direction and approved frontend stack",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "ADR-0013 decisions 1-4; DASHBOARD users, navigation and frontend architecture",
+      "evidence": [
+        "docs/DASHBOARD.md",
+        "docs/adr/0013-customer-and-operations-dashboard.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DASH-DOC-002",
+      "text": "Record accepted home priorities, menus, dedicated plan review, cancellation modes and payment simulation outcomes",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Screen map and customer journeys reflect interactive selections; fictional wireframe values do not become business rules",
+      "evidence": [
+        "docs/DASHBOARD.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DASH-DOC-003",
+      "text": "Document cookie/CSRF same-origin decision without silently weakening existing token restrictions or read-only staff boundary",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Partial supersession note in ADR-0006; session/capability migration and internal-session backend enforcement required",
+      "evidence": [
+        "docs/adr/0006-sanctum-tokens-abilities-and-ownership.md",
+        "docs/adr/0013-customer-and-operations-dashboard.md",
+        "docs/DASHBOARD.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DASH-DOC-004",
+      "text": "Document isolated per-visitor public demo, role entry, prepared scenarios/reset and backend dependencies",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Demo lifecycle includes server queries/jobs/cache, broad-staff isolation, reset generation and no real payment routes; exact API/isolation config pending",
+      "evidence": [
+        "docs/DASHBOARD.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DASH-DOC-005",
+      "text": "Keep portfolio README and status aligned with dashboard priority and actual delivery",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "Dashboard now documented, not implemented; API/session/demo activation and detailed visual/tool decisions remain pending",
+      "evidence": [
+        "README.md",
+        "docs/STATUS.md"
+      ],
+      "pending": null,
+      "reason": null
+    },
+    {
+      "id": "DASH-DOC-006",
+      "text": "Validate requirements against documentation and independent review before delivery",
+      "disposition": "implement",
+      "status": "done",
+      "delivered": "52 local links, 2 heading anchors, fenced blocks, task JSON and diff validated; independent review found no actionable issues",
+      "evidence": [
+        "Local link/anchor checker",
+        "git diff --check",
+        "Independent review"
+      ],
+      "pending": null,
+      "reason": null
+    }
+  ],
+  "spec": {
+    "inputs": "Owner selections from interactive planning, current API/auth implementation and reviewed low-fidelity wireframes",
+    "outputs": [
+      "ADR-0013",
+      "DASHBOARD.md",
+      "ADR-0006 planning supersession note",
+      "README/STATUS updates"
+    ],
+    "acceptance": "Accepted decisions traceable, remaining details explicit, no claim of implemented sessions/demo or completed visual approval; links valid and independent review passed",
+    "unresolved": "Exact endpoint schemas and capabilities mapping; fixture/isolation implementation; generator/i18n/forms/testing tools and versions; final branding; accessibility target; runtime limits and hosting."
+  },
+  "validation": [
+    {
+      "check": "Local Markdown links and anchors",
+      "result": "passed",
+      "links": 52,
+      "anchors": 2
+    },
+    {
+      "check": "Fenced blocks and task JSON parsing",
+      "result": "passed"
+    },
+    {
+      "check": "Runtime tests",
+      "result": "not run; documentation-only change"
+    },
+    {
+      "check": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "Independent review agent",
+      "result": "No actionable omissions or contradictions",
+      "scope": "Entire ledger, DASHBOARD.md, ADR-0013 and README/STATUS/ADR-0006 diffs; checked decision fidelity, planned status, auth/session permissions and demo lifecycle"
+    }
+  ],
+  "publicationNote": "Verify both remote main refs against local HEAD after committing; final self-referencing commit evidence is stored in .git outside this record."
+}
